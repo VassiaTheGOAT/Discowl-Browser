@@ -1,87 +1,71 @@
 'use strict';
 
-/**
- * updater.js — Gestion des mises à jour automatiques via electron-updater
- *
- * Principe :
- *  1. Au démarrage, vérifie silencieusement si une nouvelle version existe
- *     sur GitHub Releases (latest.yml / latest-mac.yml)
- *  2. Si oui, télécharge en arrière-plan
- *  3. Une fois prêt, envoie une notification au renderer
- *  4. L'utilisateur choisit de redémarrer ou plus tard
- */
-
 const { autoUpdater } = require('electron-updater');
-const { ipcMain, BrowserWindow } = require('electron');
+const { ipcMain }     = require('electron');
 
 function initUpdater(mainWindow) {
-  // Logs visibles dans la console pendant le dev
-  autoUpdater.logger = console;
-
-  // Ne pas installer automatiquement — attendre la confirmation de l'utilisateur
-  autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.autoDownload         = true;
+  autoUpdater.logger       = console;
+  autoUpdater.autoDownload = true;           // télécharge silencieusement dès qu'une MAJ est trouvée
+  autoUpdater.autoInstallOnAppQuit = true;   // installe si l'utilisateur ferme sans cliquer "Restart"
 
   /* ── Events ────────────────────────────────────────────────── */
 
-  autoUpdater.on('checking-for-update', () => {
-    console.log('[Updater] Vérification des mises à jour…');
-  });
-
-  autoUpdater.on('update-not-available', () => {
-    console.log('[Updater] Déjà à jour.');
-  });
-
   autoUpdater.on('update-available', (info) => {
-    console.log('[Updater] Mise à jour disponible :', info.version);
+    console.log('[Updater] Update available:', info.version);
+    // Informer le renderer — la bannière s'affiche (téléchargement commence automatiquement)
     mainWindow?.webContents.send('update:available', {
-      version: info.version,
+      version:      info.version,
       releaseNotes: info.releaseNotes || ''
     });
   });
 
   autoUpdater.on('download-progress', (progress) => {
     mainWindow?.webContents.send('update:progress', {
-      percent:   Math.round(progress.percent),
-      speed:     progress.bytesPerSecond,
-      total:     progress.total,
-      received:  progress.transferred
+      percent:  Math.round(progress.percent),
+      speed:    progress.bytesPerSecond,
+      total:    progress.total,
+      received: progress.transferred
     });
   });
 
   autoUpdater.on('update-downloaded', (info) => {
-    console.log('[Updater] Mise à jour téléchargée :', info.version);
+    console.log('[Updater] Update ready:', info.version);
+    // Bannière passe en mode "Restart & Install"
     mainWindow?.webContents.send('update:ready', {
       version: info.version
     });
   });
 
-  autoUpdater.on('error', (err) => {
-    console.error('[Updater] Erreur :', err.message);
-    // Ne pas crasher l'app sur une erreur d'update
+  autoUpdater.on('update-not-available', () => {
+    console.log('[Updater] Already up to date.');
   });
 
-  /* ── IPC — déclenché depuis le renderer ────────────────────── */
+  autoUpdater.on('error', (err) => {
+    // Ne pas crasher l'app — les erreurs réseau sont fréquentes (offline, firewall...)
+    console.error('[Updater] Error:', err.message);
+  });
 
-  // Redémarrer et installer la mise à jour
+  /* ── IPC ───────────────────────────────────────────────────── */
+
+  // "Restart & Install" cliqué dans la bannière
   ipcMain.handle('update:install', () => {
     autoUpdater.quitAndInstall(false, true);
   });
 
-  // Vérifier manuellement (bouton dans les paramètres)
+  // "Check now" dans Settings
   ipcMain.handle('update:check', async () => {
     try {
       await autoUpdater.checkForUpdates();
     } catch (e) {
-      console.error('[Updater] checkForUpdates échoué :', e.message);
+      console.error('[Updater] Manual check failed:', e.message);
     }
   });
 
-  /* ── Lancement ─────────────────────────────────────────────── */
-  // Attendre 5s après le démarrage pour ne pas ralentir le boot
+  /* ── Vérification au démarrage ─────────────────────────────── */
+  // 5s de délai pour ne pas ralentir le boot initial
   setTimeout(() => {
-    autoUpdater.checkForUpdatesAndNotify().catch(e => {
-      console.error('[Updater] check silencieux échoué :', e.message);
+    autoUpdater.checkForUpdates().catch(e => {
+      console.error('[Updater] Startup check failed:', e.message);
     });
   }, 5000);
 }

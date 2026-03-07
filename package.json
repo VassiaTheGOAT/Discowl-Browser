@@ -1,0 +1,65 @@
+{
+  "name": "discowl-browser",
+  "version": "1.0.0",
+  "description": "Discowl Browser — A new gen browser",
+  "main": "main/main.js",
+  "author": "QUESNEL-TALLEC Vassia",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:win":   "electron-builder --win --publish never",
+    "build:mac":   "electron-builder --mac --publish never",
+    "build:linux": "electron-builder --linux --publish never",
+    "release":     "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.7"
+  },
+  "devDependencies": {
+    "electron":         "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId":       "com.discowl.browser",
+    "productName": "Discowl Browser",
+
+    "publish": {
+      "provider": "github",
+      "owner":    "VassiaTheGOAT",
+      "repo":     "Discowl-Browser"
+    },
+
+    "directories": { "output": "dist" },
+
+    "files": [
+      "main/**",
+      "preload/**",
+      "renderer/**",
+      "components/**",
+      "store/**",
+      "assets/**",
+      "package.json"
+    ],
+
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/Logo-discowl.ico"
+    },
+    "nsis": {
+      "oneClick":          false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName":      "Discowl Browser"
+    },
+
+    "mac": {
+      "target": "dmg",
+      "icon":   "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon":   "assets/icon.png"
+    }
+  }
+}

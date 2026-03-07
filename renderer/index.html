@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src * data: blob:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discowl Browser</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     APP ROOT — full-height flex column
+═══════════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── 1. Tab Bar ────────────────────────────────────────────── -->
+  <div id="tab-bar" role="tablist">
+    <div id="tabs-scroll">
+      <div id="tabs-container">
+        <!-- tabs injected by renderer.js — new-tab-btn toujours en dernier -->
+        <button id="new-tab-btn" class="tab-action-btn" title="New tab (Ctrl+T)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+    <button id="new-private-btn" class="tab-action-btn private-btn" title="New private tab (Ctrl+Shift+T)">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="5" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="1" x2="2" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <!-- ── 3. Navigation Toolbar ─────────────────────────────────── -->
+  <div id="toolbar" role="toolbar" aria-label="Navigation toolbar">
+
+    <div class="nav-buttons">
+      <button id="back-btn"    class="nav-btn" title="Back (Alt+←)" disabled>
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 4L6 9l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="forward-btn" class="nav-btn" title="Forward (Alt+→)" disabled>
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M7 4l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="reload-btn"  class="nav-btn" title="Reload (F5)">
+        <svg id="reload-icon" width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 9a6 6 0 106-6H6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M2 5l4 1-1 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="home-btn"    class="nav-btn" title="Home">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 9L9 3l7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16V9.5h8V16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <!-- URL / Search bar -->
+    <div id="url-bar-wrapper">
+      <span id="security-icon" class="security-icon" title="Sécurité de la connexion">
+        <svg id="lock-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="6" width="10" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </span>
+      <input id="url-bar" type="text"
+             autocomplete="off" spellcheck="false"
+             aria-label="Address bar"
+             placeholder="Search or enter address…" />
+      <button id="bookmark-star-btn" class="url-action-btn" title="Bookmark this page">
+        <svg id="star-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.85 3.75 4.15.6-3 2.9.7 4.1L8 10.25 4.3 12.35l.7-4.1L2 5.35l4.15-.6L8 1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <!-- Search engine selector -->
+    <div id="engine-selector-wrapper">
+      <button id="engine-selector-btn" class="engine-btn" title="Changer de moteur de recherche">
+        <span id="engine-icon">🦆</span>
+      </button>
+      <div id="engine-dropdown" class="dropdown hidden" role="listbox">
+        <div class="engine-option" data-engine="duckduckgo" role="option">
+          <span>🦆</span><span>DuckDuckGo</span>
+        </div>
+        <div class="engine-option" data-engine="google" role="option">
+          <span>🔍</span><span>Google</span>
+        </div>
+        <div class="engine-option" data-engine="bing" role="option">
+          <span>🔷</span><span>Bing</span>
+        </div>
+        <div class="engine-option" data-engine="brave" role="option">
+          <span>🦁</span><span>Brave Search</span>
+        </div>
+        <div class="engine-option" data-engine="ecosia" role="option">
+          <span>🌱</span><span>Ecosia</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar-actions">
+      <!-- Bookmarks sidebar toggle -->
+      <button id="sidebar-left-toggle" class="action-btn" title="Bookmarks (Ctrl+B)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 4h12M3 9h12M3 14h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <!-- History sidebar toggle -->
+      <button id="sidebar-right-toggle" class="action-btn" title="History (Ctrl+H)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M9 5v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <!-- Downloads button -->
+      <div style="position:relative">
+        <button id="downloads-btn" class="action-btn" title="Downloads (Ctrl+J)" aria-expanded="false">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v9M5 8l4 4 4-4M2 15h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="downloads-badge" class="dl-badge hidden">0</span>
+        </button>
+        <!-- Downloads panel dropdown -->
+        <div id="downloads-panel" class="dl-panel hidden">
+          <div class="dl-panel-header">
+            <span class="dl-panel-title">Downloads</span>
+            <div style="display:flex;gap:6px">
+              <button id="downloads-clear-all" class="dl-header-btn" title="Clear completed">Clear</button>
+              <button id="downloads-see-all"   class="dl-header-btn" title="See all downloads">See all</button>
+            </div>
+          </div>
+          <div class="dl-empty">No downloads yet</div>
+          <div class="dl-list"></div>
+        </div>
+      </div>
+      <!-- Sandwich / hamburger menu -->
+      <button id="sandwich-btn" class="action-btn" title="Menu" aria-expanded="false" aria-haspopup="true">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="4"  r="1.4" fill="currentColor"/><circle cx="9" cy="9"  r="1.4" fill="currentColor"/><circle cx="9" cy="14" r="1.4" fill="currentColor"/></svg>
+      </button>
+    </div>
+
+  </div><!-- /#toolbar -->
+
+  <!-- ── 3b. Bookmarks Toolbar (sous la toolbar nav) ────────────── -->
+  <div id="bookmarks-toolbar" role="toolbar" aria-label="Bookmarks bar">
+    <div id="bookmarks-toolbar-items">
+      <!-- populated by bookmarks.js -->
+    </div>
+  </div>
+
+  <!-- ── 4. Content Area (flex row) ────────────────────────────── -->
+  <div id="content-area">
+
+    <!-- Left Sidebar — Bookmarks -->
+    <aside id="left-sidebar" class="sidebar sidebar-left closed" aria-label="Bookmarks" role="complementary">
+      <div class="sidebar-header">
+        <span class="sidebar-title">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2h10v13l-5-3-5 3V2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          Bookmarks
+        </span>
+        <button class="sidebar-close-btn" data-target="left-sidebar" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="sidebar-search-bar">
+        <input id="bookmarks-search" type="text" placeholder="Search…" autocomplete="off" />
+      </div>
+      <div class="sidebar-actions">
+        <button id="add-bookmark-btn" class="sidebar-action-btn" title="Add bookmark">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Add
+        </button>
+        <button id="add-folder-btn" class="sidebar-action-btn" title="New folder">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 3h5l1 1h6v8H1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          Folder
+        </button>
+      </div>
+      <div id="bookmarks-tree" role="tree" aria-label="Arborescence des favoris">
+        <!-- populated by bookmarks.js -->
+      </div>
+    </aside>
+
+    <!-- Webview Container — the actual browser content -->
+    <div id="webview-container" role="main" aria-label="Browser content">
+      <!-- <webview> elements are injected here by renderer.js -->
+      <div id="new-tab-page" class="newtab-page hidden">
+        <div class="newtab-inner">
+
+          <h1 class="newtab-title" id="newtab-title">Discowl</h1>
+
+          <form id="newtab-form" class="newtab-form">
+            <input id="newtab-search-input"
+                   type="text"
+                   placeholder="Search..."
+                   autocomplete="off"
+                   autofocus />
+            <button type="submit" id="newtab-search-btn">Search</button>
+          </form>
+
+        </div>
+      </div>
+      <!-- Downloads full page -->
+      <div id="downloads-page" class="downloads-full-page hidden">
+        <div class="downloads-full-inner">
+          <div class="downloads-full-header">
+            <h2>Downloads</h2>
+            <button id="downloads-page-close" class="dl-close-btn" title="Close">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="dl-full-empty hidden">No downloads yet</div>
+          <div class="dl-full-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Sidebar — History -->
+    <aside id="right-sidebar" class="sidebar sidebar-right closed" aria-label="History" role="complementary">
+      <div class="sidebar-header">
+        <span class="sidebar-title">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.5v3.75l2.5 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          History
+        </span>
+        <button class="sidebar-close-btn" data-target="right-sidebar" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="sidebar-search-bar">
+        <input id="history-search" type="text" placeholder="Search history…" autocomplete="off" />
+      </div>
+      <div class="sidebar-actions">
+        <button id="clear-history-btn" class="sidebar-action-btn danger-btn" title="Clear history">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 4h10M4 4V2.5A1.5 1.5 0 015.5 1h3A1.5 1.5 0 0110 2.5V4m1 0l-.8 8H3.8L3 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Clear all
+        </button>
+      </div>
+      <div id="history-list" role="list">
+        <!-- populated by history.js -->
+      </div>
+    </aside>
+
+  </div><!-- /#content-area -->
+
+  <!-- ── 5. Status Bar ─────────────────────────────────────────── -->
+  <div id="status-bar">
+    <span id="status-text"></span>
+    <span id="tor-indicator" class="hidden">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="#a78bfa" stroke-width="1.5"/><circle cx="6" cy="6" r="2" fill="#a78bfa"/></svg>
+      Tor
+    </span>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ═══════════════════════════════════════════════════════════════
+     OVERLAYS (position:fixed — always above webview & sidebars)
+═══════════════════════════════════════════════════════════════════ -->
+
+<!-- Sandwich Menu -->
+<div id="sandwich-menu" class="dropdown-panel hidden" role="menu" aria-label="Menu principal">
+  <div class="menu-item" id="menu-new-tab" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v14M1 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    New tab
+    <span class="shortcut">Ctrl+T</span>
+  </div>
+  <div class="menu-item" id="menu-new-private" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 15c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="13" y1="1" x2="3" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    Private tab
+    <span class="shortcut">Ctrl+Shift+P</span>
+  </div>
+  <div class="menu-separator"></div>
+  <div class="menu-item" id="menu-bookmarks" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2h10v13l-5-3-5 3V2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    Bookmarks
+    <span class="shortcut">Ctrl+B</span>
+  </div>
+  <div class="menu-item" id="menu-history" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v3.75l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    History
+    <span class="shortcut">Ctrl+H</span>
+  </div>
+  <div class="menu-item" id="menu-downloads" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 7l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Downloads
+    <span class="shortcut">Ctrl+J</span>
+  </div>
+  <div class="menu-separator"></div>
+  <div class="menu-item" id="menu-zoom-in" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 11.5l3 3M7 4.5v5M4.5 7h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    Zoom+
+    <span class="shortcut">Ctrl++</span>
+  </div>
+  <div class="menu-item" id="menu-zoom-out" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 11.5l3 3M4.5 7h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    Zoom−
+    <span class="shortcut">Ctrl+-</span>
+  </div>
+  <div class="menu-separator"></div>
+  <div class="menu-item" id="menu-settings" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    Settings
+  </div>
+  <div class="menu-separator"></div>
+  <div class="menu-item danger-item" id="menu-quit" role="menuitem">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3H3a1 1 0 00-1 1v8a1 1 0 001 1h3M10 11l4-4-4-4M14 7H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Quit
+  </div>
+</div>
+
+<!-- Settings Panel (full-height overlay) -->
+<div id="settings-panel" class="full-panel hidden" role="dialog" aria-label="Settings" aria-modal="true">
+  <div class="full-panel-header">
+    <h2>Settings</h2>
+    <button id="settings-close-btn" class="panel-close-btn">
+      <svg width="20" height="20" viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="settings-layout">
+    <nav class="settings-nav" role="navigation">
+      <button class="settings-nav-item active" data-section="general">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/></svg>
+        Général
+      </button>
+      <button class="settings-nav-item" data-section="appearance">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 3v2M8 11v2M3 8h2M11 8h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Apparence
+      </button>
+      <button class="settings-nav-item" data-section="search">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 11.5l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Moteur de recherche
+      </button>
+      <button class="settings-nav-item" data-section="privacy">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 4v4c0 3.5 2.5 6.5 6 7.5 3.5-1 6-4 6-7.5V4L8 1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        Confidentialité
+      </button>
+      <button class="settings-nav-item" data-section="network">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M1.5 8h13M8 1.5c-2 2-3 4-3 6.5s1 4.5 3 6.5M8 1.5c2 2 3 4 3 6.5s-1 4.5-3 6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Réseau
+      </button>
+      <button class="settings-nav-item" data-section="tor">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#a78bfa" stroke-width="1.5"/><circle cx="8" cy="8" r="3" fill="#a78bfa"/></svg>
+        Tor
+      </button>
+    </nav>
+    <div class="settings-content">
+      <!-- Sections populated by settings.js -->
+      <div id="settings-general"    class="settings-section active"></div>
+      <div id="settings-appearance" class="settings-section"></div>
+      <div id="settings-search"     class="settings-section"></div>
+      <div id="settings-privacy"    class="settings-section"></div>
+      <div id="settings-network"    class="settings-section"></div>
+      <div id="settings-tor"        class="settings-section"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bookmark Add/Edit Modal -->
+<div id="bookmark-modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-overlay"></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="bookmark-modal-title">Add bookmark</h3>
+      <button class="modal-close" id="bookmark-modal-close">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <label class="form-label">Nom
+        <input id="bm-name-input" type="text" class="form-input" placeholder="Nom du favori" />
+      </label>
+      <label class="form-label">URL
+        <input id="bm-url-input" type="text" class="form-input" placeholder="https://…" />
+      </label>
+      <label class="form-label">
+        <input id="bm-toolbar-check" type="checkbox" /> Show in bookmarks bar
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="bookmark-modal-cancel">Cancel</button>
+      <button class="btn btn-primary"   id="bookmark-modal-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notifications -->
+<div id="toast-container" aria-live="polite"></div>
+
+<!-- Dark overlay for modals/menus (click-away) -->
+<div id="click-outside-overlay" class="hidden"></div>
+
+<!-- Scripts -->
+<script src="../components/bookmarks.js"></script>
+<script src="../components/history.js"></script>
+<script src="../components/settings.js"></script>
+<script src="../components/sidebar.js"></script>
+  <script src="../components/downloads.js"></script>
+<script src="renderer.js"></script>
+
+</body>
+</html>

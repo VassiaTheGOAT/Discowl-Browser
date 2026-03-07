@@ -178,7 +178,7 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   webview.addEventListener('did-start-loading', () => {
     tab.isLoading = true;
     refreshTab(id);
-    if (activeTabId === id) updateNavButtons();
+    if (activeTabId === id) { updateNavButtons(); updateReloadBtn(true); }
   });
 
   webview.addEventListener('did-stop-loading', () => {
@@ -188,6 +188,7 @@ function createTab(url = 'about:newtab', isPrivate = false) {
     refreshTab(id);
     if (activeTabId === id) {
       updateNavButtons();
+      updateReloadBtn(false);
       updateUrlBar(tab.url);
     }
   });
@@ -449,8 +450,10 @@ function switchTab(id) {
 
   updateUrlBar(tab.url);
   updateNavButtons();
+  updateReloadBtn(tab.isLoading);
   updateSecurityIcon(tab.url);
   updateBookmarkStar(tab.url);
+  updateZoomIndicator(tab);
   document.title = tab.title + ' — Discowl';
 }
 
@@ -539,6 +542,77 @@ function updateNavButtons() {
   document.getElementById('forward-btn').disabled = !canForward;
 }
 
+function updateReloadBtn(isLoading) {
+  const btn  = document.getElementById('reload-btn');
+  const icon = document.getElementById('reload-icon');
+  if (!btn || !icon) return;
+  if (isLoading) {
+    btn.title = 'Stop (Esc)';
+    icon.innerHTML = `<path d="M4 4l10 10M14 4L4 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`;
+  } else {
+    btn.title = 'Reload (F5)';
+    icon.innerHTML = `<path d="M3 9a6 6 0 106-6H6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M2 5l4 1-1 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+}
+
+function updateZoomIndicator(tab) {
+  const btn = document.getElementById('zoom-indicator');
+  if (!btn) return;
+  if (!tab || tab.zoom === 1 || !tab.zoom) {
+    btn.classList.add('hidden');
+  } else {
+    btn.textContent = Math.round(tab.zoom * 100) + '%';
+    btn.classList.remove('hidden');
+  }
+}
+
+function showNavHistoryMenu(direction, anchorEl) {
+  const tab = getActiveTab();
+  if (!tab) return;
+
+  const menuId = direction === 'back' ? 'back-history-menu' : 'forward-history-menu';
+  const menu   = document.getElementById(menuId);
+  if (!menu) return;
+
+  // Récupérer l'historique de navigation du webview
+  tab.webview.getURL(); // force refresh
+  const entries = tab.webview.getAllEntries ? tab.webview.getAllEntries() : [];
+
+  if (entries.length === 0) return;
+
+  const currentIdx = tab.webview.getCurrentEntryIndex ? tab.webview.getCurrentEntryIndex() : -1;
+  const items = direction === 'back'
+    ? entries.slice(0, currentIdx).reverse()
+    : entries.slice(currentIdx + 1);
+
+  if (items.length === 0) return;
+
+  menu.innerHTML = '';
+  items.slice(0, 12).forEach((entry, i) => {
+    const item = document.createElement('div');
+    item.className = 'nav-history-item';
+    item.textContent = entry.title || entry.url || '(no title)';
+    item.title = entry.url || '';
+    item.addEventListener('click', () => {
+      const offset = direction === 'back' ? -(i + 1) : (i + 1);
+      tab.webview.goToOffset(offset);
+      menu.classList.add('hidden');
+    });
+    menu.appendChild(item);
+  });
+
+  // Positionner le menu sous le bouton
+  const rect = anchorEl.getBoundingClientRect();
+  menu.style.left = rect.left + 'px';
+  menu.style.top  = (rect.bottom + 4) + 'px';
+  menu.classList.remove('hidden');
+
+  // Fermer au prochain clic
+  setTimeout(() => {
+    document.addEventListener('click', () => menu.classList.add('hidden'), { once: true });
+  }, 0);
+}
+
 function updateUrlBar(url) {
   const bar = document.getElementById('url-bar');
   if (bar !== document.activeElement) {
@@ -554,10 +628,10 @@ function updateSecurityIcon(url) {
     icon.title = '';
   } else if (url.startsWith('https://')) {
     icon.className = 'security-icon';
-    icon.title = 'Connexion sécurisée (HTTPS)';
+    icon.title = 'Secure connection (HTTPS)';
   } else {
     icon.className = 'security-icon warning';
-    icon.title = 'Connexion non sécurisée (HTTP)';
+    icon.title = 'Insecure connection (HTTP)';
   }
 }
 
@@ -583,11 +657,15 @@ function setupToolbar() {
     if (tab.webview.canGoBack()) {
       tab.webview.goBack();
     } else if (tab._prevWasNewtab) {
-      // Retourner au newtab via l'historique virtuel
-      tab._nextAfterNewtab = tab.url;  // mémoriser pour forward
+      tab._nextAfterNewtab = tab.url;
       tab._prevWasNewtab   = false;
       navigateActive('about:newtab');
     }
+  });
+
+  document.getElementById('back-btn').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showNavHistoryMenu('back', e.currentTarget);
   });
 
   document.getElementById('forward-btn').addEventListener('click', () => {
@@ -596,18 +674,22 @@ function setupToolbar() {
     if (tab.webview.canGoForward()) {
       tab.webview.goForward();
     } else if (!tab.url && tab._nextAfterNewtab) {
-      // Forward depuis le newtab vers la page suivante
       const next = tab._nextAfterNewtab;
       tab._nextAfterNewtab = '';
-      tab._prevWasNewtab   = true;   // on peut re-back vers newtab
+      tab._prevWasNewtab   = true;
       navigateActive(next);
     }
+  });
+
+  document.getElementById('forward-btn').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showNavHistoryMenu('forward', e.currentTarget);
   });
 
   document.getElementById('reload-btn').addEventListener('click', () => {
     const tab = getActiveTab();
     if (!tab) return;
-    if (tab.isLoading) tab.webview.stop();
+    if (tab.isLoading) { tab.webview.stop(); updateReloadBtn(false); }
     else tab.webview.reload();
   });
 
@@ -640,6 +722,11 @@ function setupToolbar() {
     const tab = getActiveTab();
     if (!tab?.url || tab.url === 'about:newtab') return;
     window.BookmarksManager?.openStarPopup(tab.title, tab.url);
+  });
+
+  /* ─── Zoom indicator ────────────────────────────────────── */
+  document.getElementById('zoom-indicator')?.addEventListener('click', () => {
+    zoomActive(0, true);
   });
 
   /* ─── New tab buttons ───────────────────────────────────── */
@@ -791,8 +878,10 @@ function setupKeyboardShortcuts() {
     if (e.altKey && e.key === 'ArrowLeft')  { e.preventDefault(); getActiveTab()?.webview.goBack(); }
     if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); getActiveTab()?.webview.goForward(); }
 
-    // Escape: close panels/menus
+    // Escape: stop loading or close panels/menus
     if (e.key === 'Escape') {
+      const tab = getActiveTab();
+      if (tab?.isLoading) { tab.webview.stop(); updateReloadBtn(false); return; }
       if (sandwichOpen) closeSandwich();
       const settingsPanel = document.getElementById('settings-panel');
       if (!settingsPanel?.classList.contains('hidden')) window.SettingsManager?.close();
@@ -811,7 +900,7 @@ function zoomActive(delta, reset = false) {
   try {
     tab.webview.setZoomFactor(tab.zoom);
     const pct = Math.round(tab.zoom * 100);
-    showToast(`Zoom : ${pct}%`, 'info');
+    updateZoomIndicator(tab);
   } catch {}
 }
 

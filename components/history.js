@@ -65,9 +65,9 @@ const HistoryManager = (() => {
       const d = new Date(item.timestamp);
       d.setHours(0,0,0,0);
       let label;
-      if (d.getTime() === today.getTime())     label = "Aujourd'hui";
+      if (d.getTime() === today.getTime())     label = "Today";
       else if (d.getTime() === yesterday.getTime()) label = 'Yesterday';
-      else label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      else label = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
       if (!groups[label]) groups[label] = [];
       groups[label].push(item);
@@ -83,7 +83,7 @@ const HistoryManager = (() => {
 
     const items = filtered();
     if (!items.length) {
-      list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">Aucun historique</div>`;
+      list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">No history</div>`;
       return;
     }
 

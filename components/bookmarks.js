@@ -577,7 +577,7 @@ const BookmarksManager = (() => {
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" id="folder-modal-cancel">Cancel</button>
-            <button class="btn btn-primary"   id="folder-modal-save">Créer</button>
+            <button class="btn btn-primary"   id="folder-modal-save">Create</button>
           </div>
         </div>`;
       document.body.appendChild(modal);
@@ -593,7 +593,7 @@ const BookmarksManager = (() => {
     }
 
     document.getElementById('folder-modal-title').textContent = existingItem ? 'Rename folder' : 'New folder';
-    document.getElementById('folder-modal-save').textContent  = existingItem ? 'Rename' : 'Créer';
+    document.getElementById('folder-modal-save').textContent  = existingItem ? 'Rename' : 'Create';
     const input = document.getElementById('folder-name-input');
     input.value = existingItem?.title || '';
     modal.classList.remove('hidden');

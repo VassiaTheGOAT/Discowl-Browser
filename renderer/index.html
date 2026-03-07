@@ -50,13 +50,14 @@
 
     <!-- URL / Search bar -->
     <div id="url-bar-wrapper">
-      <span id="security-icon" class="security-icon" title="Sécurité de la connexion">
+      <span id="security-icon" class="security-icon" title="Connection security">
         <svg id="lock-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="6" width="10" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </span>
       <input id="url-bar" type="text"
              autocomplete="off" spellcheck="false"
              aria-label="Address bar"
              placeholder="Search or enter address…" />
+      <button id="zoom-indicator" class="url-action-btn zoom-indicator hidden" title="Reset zoom (Ctrl+0)">100%</button>
       <button id="bookmark-star-btn" class="url-action-btn" title="Bookmark this page">
         <svg id="star-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.85 3.75 4.15.6-3 2.9.7 4.1L8 10.25 4.3 12.35l.7-4.1L2 5.35l4.15-.6L8 1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
       </button>
@@ -64,7 +65,7 @@
 
     <!-- Search engine selector -->
     <div id="engine-selector-wrapper">
-      <button id="engine-selector-btn" class="engine-btn" title="Changer de moteur de recherche">
+      <button id="engine-selector-btn" class="engine-btn" title="Change search engine">
         <span id="engine-icon">🦆</span>
       </button>
       <div id="engine-dropdown" class="dropdown hidden" role="listbox">
@@ -122,6 +123,10 @@
 
   </div><!-- /#toolbar -->
 
+  <!-- Nav history context menus -->
+  <div id="back-history-menu"    class="nav-history-menu hidden"></div>
+  <div id="forward-history-menu" class="nav-history-menu hidden"></div>
+
   <!-- ── 3b. Bookmarks Toolbar (sous la toolbar nav) ────────────── -->
   <div id="bookmarks-toolbar" role="toolbar" aria-label="Bookmarks bar">
     <div id="bookmarks-toolbar-items">
@@ -156,7 +161,7 @@
           Folder
         </button>
       </div>
-      <div id="bookmarks-tree" role="tree" aria-label="Arborescence des favoris">
+      <div id="bookmarks-tree" role="tree" aria-label="Bookmarks tree">
         <!-- populated by bookmarks.js -->
       </div>
     </aside>
@@ -300,23 +305,23 @@
     <nav class="settings-nav" role="navigation">
       <button class="settings-nav-item active" data-section="general">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/></svg>
-        Général
+        General
       </button>
       <button class="settings-nav-item" data-section="appearance">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 3v2M8 11v2M3 8h2M11 8h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Apparence
+        Appearance
       </button>
       <button class="settings-nav-item" data-section="search">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 11.5l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Moteur de recherche
+        Search engine
       </button>
       <button class="settings-nav-item" data-section="privacy">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 4v4c0 3.5 2.5 6.5 6 7.5 3.5-1 6-4 6-7.5V4L8 1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-        Confidentialité
+        Privacy
       </button>
       <button class="settings-nav-item" data-section="network">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M1.5 8h13M8 1.5c-2 2-3 4-3 6.5s1 4.5 3 6.5M8 1.5c2 2 3 4 3 6.5s-1 4.5-3 6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        Réseau
+        Network
       </button>
       <button class="settings-nav-item" data-section="tor">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#a78bfa" stroke-width="1.5"/><circle cx="8" cy="8" r="3" fill="#a78bfa"/></svg>
@@ -347,7 +352,7 @@
     </div>
     <div class="modal-body">
       <label class="form-label">Nom
-        <input id="bm-name-input" type="text" class="form-input" placeholder="Nom du favori" />
+        <input id="bm-name-input" type="text" class="form-input" placeholder="Bookmark name" />
       </label>
       <label class="form-label">URL
         <input id="bm-url-input" type="text" class="form-input" placeholder="https://…" />

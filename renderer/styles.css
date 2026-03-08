@@ -1634,3 +1634,116 @@ html[data-theme="light"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
   background: var(--bg-hover);
   color: var(--accent);
 }
+
+/* ════════════════════════════════════════════════════════════════
+   ENGINE LOGOS
+════════════════════════════════════════════════════════════════ */
+#engine-icon svg,
+.engine-logo svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.engine-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SETTINGS — Engine custom select
+════════════════════════════════════════════════════════════════ */
+.settings-engine-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 160px;
+  transition: border-color var(--transition);
+}
+.settings-engine-select:hover { border-color: var(--accent); }
+
+.settings-engine-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10001;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.4);
+  min-width: 180px;
+  overflow: hidden;
+  padding: 4px 0;
+}
+.settings-engine-dropdown.hidden { display: none; }
+
+.settings-engine-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.settings-engine-option:hover   { background: var(--bg-hover); }
+.settings-engine-option.active  { color: var(--accent); font-weight: 600; }
+
+/* ════════════════════════════════════════════════════════════════
+   SETTINGS — Custom engine select
+════════════════════════════════════════════════════════════════ */
+.engine-custom-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 160px;
+  transition: background var(--transition);
+}
+.engine-custom-btn:hover { background: var(--bg-hover); }
+.engine-custom-btn svg:last-child { margin-left: auto; color: var(--text-muted); }
+
+.engine-custom-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.4);
+  z-index: 9999;
+  min-width: 180px;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.engine-custom-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.engine-custom-item:hover  { background: var(--bg-hover); }
+.engine-custom-item.active { background: var(--bg-input); color: var(--accent); }

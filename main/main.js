@@ -43,6 +43,9 @@ function readSettingsSync() {
 ══════════════════════════════════════════════════════════════ */
 const earlySettings = readSettingsSync();
 
+// Désactiver le GPU disk cache (évite les erreurs de permission Windows)
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+
 if (earlySettings.torEnabled) {
   console.log('[Main] torEnabled détecté avant ready → proxy Chromium configuré');
   app.commandLine.appendSwitch('proxy-server', 'socks5://127.0.0.1:9050');

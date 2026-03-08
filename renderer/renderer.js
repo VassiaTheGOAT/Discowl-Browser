@@ -738,11 +738,16 @@ function setupToolbar() {
   });
 
   /* ─── Bookmark star ─────────────────────────────────────── */
-  // Ouvre la star popup (style Firefox) : confirm/edit avant sauvegarde
   document.getElementById('bookmark-star-btn').addEventListener('click', () => {
     const tab = getActiveTab();
-    if (!tab?.url || tab.url === 'about:newtab') return;
-    window.BookmarksManager?.openStarPopup(tab.title, tab.url);
+    if (!tab) return;
+    // Fallback : lire l'URL depuis la barre si tab.url est vide
+    const url = tab.url || document.getElementById('url-bar')?.value?.trim();
+    if (!url || url === 'about:newtab' || url.startsWith('about:')) return;
+    const title = tab.title && tab.title !== 'New tab' && tab.title !== 'Private tab'
+      ? tab.title
+      : url;
+    window.BookmarksManager?.openStarPopup(title, url);
   });
 
   /* ─── Zoom indicator ────────────────────────────────────── */

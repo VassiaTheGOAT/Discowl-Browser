@@ -302,7 +302,7 @@ const BookmarksManager = (() => {
     popup.id = 'star-popup';
     popup.style.cssText = `
       position: fixed;
-      z-index: 9998;
+      z-index: 10002;
       width: 300px;
       background: var(--bg-modal);
       border: 1px solid var(--border-strong);
@@ -650,11 +650,12 @@ const BookmarksManager = (() => {
     const marked = isBookmarked(url);
     btn.classList.toggle('bookmarked', marked);
     btn.title = marked ? 'Edit / Remove bookmark' : 'Add to bookmarks';
-    // Changer l'apparence de l'icône SVG (filled vs outline)
-    const path = btn.querySelector('path');
-    if (path) {
-      path.setAttribute('fill', marked ? 'var(--accent)' : 'none');
-      path.setAttribute('stroke', marked ? 'var(--accent)' : 'currentColor');
+    // filled si bookmarked, outline sinon
+    const svg = document.getElementById('star-icon') || btn.querySelector('svg');
+    if (svg) {
+      svg.innerHTML = marked
+        ? `<path d="M8 1l1.85 3.75 4.15.6-3 2.9.7 4.1L8 10.25 4.3 12.35l.7-4.1L2 5.35l4.15-.6L8 1z" fill="var(--accent)" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/>`
+        : `<path d="M8 1l1.85 3.75 4.15.6-3 2.9.7 4.1L8 10.25 4.3 12.35l.7-4.1L2 5.35l4.15-.6L8 1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>`;
     }
   }
 

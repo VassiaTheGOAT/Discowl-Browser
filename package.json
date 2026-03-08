@@ -1,6 +1,6 @@
 {
   "name": "discowl-browser",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Discowl Browser — A new gen browser",
   "main": "main/main.js",
   "author": "QUESNEL-TALLEC Vassia",
@@ -10,7 +10,7 @@
     "build:win":   "electron-builder --win --publish never",
     "build:mac":   "electron-builder --mac --publish never",
     "build:linux": "electron-builder --linux --publish never",
-    "release":     "electron-builder --win --publish always"
+    "release":    "electron-builder --win --publish always"
   },
   "dependencies": {
     "electron-updater": "^6.1.7"

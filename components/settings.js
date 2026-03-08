@@ -259,7 +259,7 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.0.0';
+      if (vEl) vEl.textContent = v || '1.0.2';
     }).catch(() => {});
 
     sec.appendChild(makeGroup('Application', [

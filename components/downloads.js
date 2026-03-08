@@ -235,17 +235,105 @@ window.DownloadManager = (() => {
     document.getElementById('downloads-page')?.classList.add('hidden');
   }
 
+  /* ── Update in-place (sans recréer le DOM) ───────────────────── */
+  let _rafPending = false;
+  function scheduleRender() {
+    if (_rafPending) return;
+    _rafPending = true;
+    requestAnimationFrame(() => {
+      _rafPending = false;
+      updateBadge();
+      if (panelOpen) _patchPanel();
+      _patchFullPage();
+    });
+  }
+
+  // Met à jour uniquement les parties dynamiques d'un item existant dans le DOM
+  function _patchItem(el, item) {
+    const p    = pct(item);
+    const done = item.state !== 'progressing';
+
+    const stateEl = el.querySelector('.dl-state');
+    const sizeEl  = el.querySelector('.dl-size');
+    const speedEl = el.querySelector('.dl-speed');
+    const etaEl   = el.querySelector('.dl-eta');
+    const barFill = el.querySelector('.dl-bar-fill');
+    const bar     = el.querySelector('.dl-bar');
+
+    if (stateEl) { stateEl.textContent = stateLabel(item); stateEl.style.color = stateColor(item); }
+    if (sizeEl  && item.totalBytes) sizeEl.textContent = fmt(item.receivedBytes) + ' / ' + fmt(item.totalBytes);
+    if (speedEl) speedEl.textContent = done ? '' : speed(item);
+    if (etaEl)   etaEl.textContent   = done ? '' : eta(item);
+    if (barFill) barFill.style.width = p + '%';
+    if (bar && done) bar.style.display = 'none';
+
+    // Si l'item vient de terminer, recréer les boutons d'action
+    if (done && el.querySelector('[data-action="cancel"]')) {
+      const actionsEl = el.querySelector('.dl-actions');
+      if (actionsEl) {
+        const fresh = renderItem(item, el.classList.contains('dl-compact'));
+        actionsEl.replaceWith(fresh.querySelector('.dl-actions'));
+      }
+      // Icône → checkmark
+      const iconEl = el.querySelector('.dl-icon');
+      if (iconEl) {
+        iconEl.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v9M5 8l4 4 4-4M2 15h14" stroke="${stateColor(item)}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      }
+    }
+  }
+
+  function _patchPanel() {
+    const panel = document.getElementById('downloads-panel');
+    if (!panel) return;
+    const list  = panel.querySelector('.dl-list');
+    const empty = panel.querySelector('.dl-empty');
+    if (!list) return;
+
+    const items = [...downloads.values()].reverse().slice(0, 8);
+    if (items.length === 0) { empty?.classList.remove('hidden'); list.innerHTML = ''; return; }
+    empty?.classList.add('hidden');
+
+    // Ajouter les nouveaux items, mettre à jour les existants
+    items.forEach(item => {
+      const existing = list.querySelector(`[data-dl-id="${item.id}"]`);
+      if (existing) { _patchItem(existing, item); }
+      else { list.prepend(renderItem(item, true)); }
+    });
+    // Retirer les items qui ne sont plus dans la liste (au-delà de 8)
+    const ids = new Set(items.map(i => i.id));
+    list.querySelectorAll('[data-dl-id]').forEach(el => {
+      if (!ids.has(el.dataset.dlId)) el.remove();
+    });
+  }
+
+  function _patchFullPage() {
+    const page = document.getElementById('downloads-page');
+    if (!page || page.classList.contains('hidden')) return;
+    const list  = page.querySelector('.dl-full-list');
+    const empty = page.querySelector('.dl-full-empty');
+    if (!list) return;
+
+    const items = [...downloads.values()].reverse();
+    if (items.length === 0) { empty?.classList.remove('hidden'); list.innerHTML = ''; return; }
+    empty?.classList.add('hidden');
+
+    items.forEach(item => {
+      const existing = list.querySelector(`[data-dl-id="${item.id}"]`);
+      if (existing) { _patchItem(existing, item); }
+      else { list.prepend(renderItem(item, false)); }
+    });
+  }
+
   /* ── IPC listeners ───────────────────────────────────────────── */
   function init() {
-    // Écouter les events de téléchargement depuis main.js
     window.discowlAPI.downloads.onStarted((item) => {
       item._lastBytes = 0;
       item._lastTime  = Date.now();
       downloads.set(item.id, item);
-      updateBadge();
+      // Recréer le panel proprement pour le nouvel item
       renderPanel();
       renderFullPage();
-      // Ouvrir le panel automatiquement
+      updateBadge();
       if (!panelOpen) openPanel();
     });
 
@@ -255,9 +343,7 @@ window.DownloadManager = (() => {
       item._lastBytes = item.receivedBytes;
       item._lastTime  = Date.now();
       Object.assign(item, update);
-      updateBadge();
-      if (panelOpen) renderPanel();
-      renderFullPage();
+      scheduleRender(); // throttlé via requestAnimationFrame
     });
 
     // Bouton dans la toolbar

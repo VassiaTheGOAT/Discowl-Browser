@@ -6,7 +6,7 @@ const fs   = require('fs');
 const os   = require('os');
 
 const TorManager    = require('./torManager');
-const { initUpdater } = require('./updater');
+const { runUpdater, registerIpc: registerUpdaterIpc } = require('./updater');
 const Storage    = require('../store/storage');
 
 /* ══════════════════════════════════════════════════════════════
@@ -69,7 +69,10 @@ app.whenReady().then(async () => {
   const settings = storage.getSettings();
   nativeTheme.themeSource = settings.theme === 'dark' ? 'dark' : 'light';
 
-  // Démarrer tor.exe si activé (le proxy Chromium est déjà configuré via commandLine)
+  // Enregistrer les IPC update (check manuel depuis Settings)
+  registerUpdaterIpc();
+
+  // Démarrer tor.exe si activé
   if (settings.torEnabled) {
     console.log('[Main] Démarrage de tor.exe…');
     torManager.startTor()
@@ -77,12 +80,11 @@ app.whenReady().then(async () => {
       .catch(e => console.error('[Main] Tor échoué au boot :', e.message));
   }
 
-  createWindow();
-
-  // Démarrer le système de mise à jour (seulement en prod)
-  if (app.isPackaged) {
-    initUpdater(mainWindow);
-  }
+  // Splash updater AVANT la fenêtre principale (en prod uniquement)
+  // En dev, runUpdater appelle onDone immédiatement
+  runUpdater(() => {
+    createWindow();
+  });
 });
 
 app.on('window-all-closed', async () => {

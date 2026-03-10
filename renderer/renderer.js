@@ -77,20 +77,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     createTab(e.detail.url, false);
   });
 
-  // ── Mises à jour ──────────────────────────────────────────
-  if (window.discowlAPI.updates) {
-    window.discowlAPI.updates.onAvailable((info) => {
-      showUpdateBanner('update-available', info.version);
-    });
-    window.discowlAPI.updates.onProgress((p) => {
-      const el = document.getElementById('update-banner-desc');
-      if (el) el.textContent = `Downloading update… ${p.percent}%`;
-    });
-    window.discowlAPI.updates.onReady((info) => {
-      showUpdateBanner('update-ready', info.version);
-    });
-  }
-
   // Ouvrir sur la page d'accueil Discowl (newtab), pas une URL externe
   createTab('about:newtab', false);
   // Appliquer le mode NTP initial
@@ -934,44 +920,7 @@ function zoomActive(delta, reset = false) {
 /* ══════════════════════════════════════════════════════════════
    UPDATE BANNER
 ══════════════════════════════════════════════════════════════ */
-function showUpdateBanner(type, version) {
-  let banner = document.getElementById('update-banner');
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.id = 'update-banner';
-    banner.className = 'update-banner';
-    document.body.appendChild(banner);
-  }
 
-  const isReady = type === 'update-ready';
-
-  banner.innerHTML = `
-    <div class="update-banner-left">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M8 1v7M5 5l3 4 3-4M2 13h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <div>
-        <div class="update-banner-title">${isReady ? `Discowl ${version} ready to install` : `Discowl ${version} available`}</div>
-        <div class="update-banner-desc" id="update-banner-desc">${isReady ? 'Restart to apply the update' : 'Downloading in background…'}</div>
-      </div>
-    </div>
-    <div class="update-banner-actions">
-      ${isReady ? `<button class="update-btn primary" id="update-install-btn">Restart & Install</button>` : ''}
-      <button class="update-btn secondary" id="update-dismiss-btn">Later</button>
-    </div>
-  `;
-
-  banner.classList.remove('hidden');
-
-  if (isReady) {
-    document.getElementById('update-install-btn')?.addEventListener('click', () => {
-      window.discowlAPI.updates.install();
-    });
-  }
-  document.getElementById('update-dismiss-btn')?.addEventListener('click', () => {
-    banner.classList.add('hidden');
-  });
-}
 
 /* ══════════════════════════════════════════════════════════════
    NEWTAB MODE — adapte l'apparence selon privé/Tor

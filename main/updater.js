@@ -1,27 +1,101 @@
 'use strict';
 
-const { autoUpdater } = require('electron-updater');
-const { ipcMain }     = require('electron');
+/**
+ * updater.js — Pre-launch updater
+ *
+ * Flow :
+ *  1. Crée une petite fenêtre splash (420x240) AVANT la fenêtre principale
+ *  2. Vérifie silencieusement GitHub Releases
+ *  3a. Pas de MAJ → ferme splash → ouvre l'app (après 900ms)
+ *  3b. MAJ trouvée → télécharge avec barre de progression dans le splash
+ *  4. Download terminé → quitAndInstall
+ *  5. En cas d'erreur réseau → ferme splash → ouvre l'app normalement
+ */
 
-function initUpdater(mainWindow) {
+const { BrowserWindow, ipcMain } = require('electron');
+const { autoUpdater }            = require('electron-updater');
+const path                       = require('path');
+
+let _onDone   = null;
+let splashWin = null;
+
+function send(type, extra) {
+  splashWin?.webContents?.send('updater:status', { type, ...extra });
+}
+
+function closeSplashAndLaunch(delay) {
+  setTimeout(() => {
+    if (splashWin && !splashWin.isDestroyed()) {
+      splashWin.close();
+      splashWin = null;
+    }
+    _onDone?.();
+  }, delay || 900);
+}
+
+function createSplash() {
+  splashWin = new BrowserWindow({
+    width:           420,
+    height:          240,
+    resizable:       false,
+    frame:           false,
+    transparent:     false,
+    alwaysOnTop:     true,
+    center:          true,
+    show:            false,
+    skipTaskbar:     true,
+    backgroundColor: '#0f1117',
+    webPreferences: {
+      preload:          path.join(__dirname, '../preload/preload-updater.js'),
+      contextIsolation: true,
+      nodeIntegration:  false,
+      sandbox:          false
+    }
+  });
+
+  splashWin.loadFile(path.join(__dirname, '../renderer/updater.html'));
+  splashWin.once('ready-to-show', () => splashWin && splashWin.show());
+  splashWin.on('closed', () => { splashWin = null; });
+}
+
+function runUpdater(onDone) {
+  _onDone = onDone;
+
+  const { app } = require('electron');
+
+  // En dev → lancer directement, pas de check
+  if (!app.isPackaged) {
+    onDone();
+    return;
+  }
+
+  createSplash();
+
   autoUpdater.logger       = console;
-  autoUpdater.autoDownload = true;           // télécharge silencieusement dès qu'une MAJ est trouvée
-  autoUpdater.autoInstallOnAppQuit = true;   // installe si l'utilisateur ferme sans cliquer "Restart"
+  autoUpdater.autoDownload = false; // contrôle manuel
 
-  /* ── Events ────────────────────────────────────────────────── */
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[Updater] Checking…');
+    send('checking');
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[Updater] Up to date.');
+    send('not-available');
+    closeSplashAndLaunch(900);
+  });
 
   autoUpdater.on('update-available', (info) => {
     console.log('[Updater] Update available:', info.version);
-    // Informer le renderer — la bannière s'affiche (téléchargement commence automatiquement)
-    mainWindow?.webContents.send('update:available', {
-      version:      info.version,
-      releaseNotes: info.releaseNotes || ''
-    });
+    send('available', { version: info.version });
+    autoUpdater.downloadUpdate();
   });
 
   autoUpdater.on('download-progress', (progress) => {
-    mainWindow?.webContents.send('update:progress', {
-      percent:  Math.round(progress.percent),
+    const pct = Math.round(progress.percent);
+    send('progress', {
+      version:  '',
+      percent:  pct,
       speed:    progress.bytesPerSecond,
       total:    progress.total,
       received: progress.transferred
@@ -29,45 +103,35 @@ function initUpdater(mainWindow) {
   });
 
   autoUpdater.on('update-downloaded', (info) => {
-    console.log('[Updater] Update ready:', info.version);
-    // Bannière passe en mode "Restart & Install"
-    mainWindow?.webContents.send('update:ready', {
-      version: info.version
-    });
-  });
-
-  autoUpdater.on('update-not-available', () => {
-    console.log('[Updater] Already up to date.');
+    console.log('[Updater] Downloaded, installing…');
+    send('downloaded', { version: info.version });
+    setTimeout(() => {
+      autoUpdater.quitAndInstall(false, true);
+    }, 1200);
   });
 
   autoUpdater.on('error', (err) => {
-    // Ne pas crasher l'app — les erreurs réseau sont fréquentes (offline, firewall...)
     console.error('[Updater] Error:', err.message);
+    send('error', { message: err.message });
+    closeSplashAndLaunch(1000);
   });
 
-  /* ── IPC ───────────────────────────────────────────────────── */
+  autoUpdater.checkForUpdates().catch(err => {
+    console.error('[Updater] checkForUpdates failed:', err.message);
+    send('error', { message: err.message });
+    closeSplashAndLaunch(1000);
+  });
+}
 
-  // "Restart & Install" cliqué dans la bannière
+function registerIpc() {
+  ipcMain.handle('update:check', async () => {
+    try { await autoUpdater.checkForUpdates(); }
+    catch (e) { console.error('[Updater] Manual check failed:', e.message); }
+  });
+
   ipcMain.handle('update:install', () => {
     autoUpdater.quitAndInstall(false, true);
   });
-
-  // "Check now" dans Settings
-  ipcMain.handle('update:check', async () => {
-    try {
-      await autoUpdater.checkForUpdates();
-    } catch (e) {
-      console.error('[Updater] Manual check failed:', e.message);
-    }
-  });
-
-  /* ── Vérification au démarrage ─────────────────────────────── */
-  // 5s de délai pour ne pas ralentir le boot initial
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(e => {
-      console.error('[Updater] Startup check failed:', e.message);
-    });
-  }, 5000);
 }
 
-module.exports = { initUpdater };
+module.exports = { runUpdater, registerIpc };

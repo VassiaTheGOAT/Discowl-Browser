@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'"/>
+  <title>Discowl</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      width: 420px;
+      height: 240px;
+      overflow: hidden;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      -webkit-app-region: drag;
+    }
+
+    /* ── Logo + titre ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 52px;
+      height: 52px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand-name {
+      font-size: 22px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #0cc0df, #ffde59);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-version {
+      font-size: 11px;
+      color: #64748b;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Zone statut ── */
+    .status-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 300px;
+    }
+
+    .status-text {
+      font-size: 12px;
+      color: #94a3b8;
+      text-align: center;
+      min-height: 16px;
+      transition: opacity 0.2s;
+    }
+
+    /* ── Barre de progression ── */
+    .progress-wrap {
+      width: 100%;
+      height: 4px;
+      background: #1e2330;
+      border-radius: 2px;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .progress-wrap.visible { opacity: 1; }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0cc0df, #ffde59);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    /* Indéterminé (checking…) */
+    .progress-bar.indeterminate {
+      width: 30%;
+      animation: slide 1.4s ease-in-out infinite;
+    }
+
+    @keyframes slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(450%); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <!-- Logo SVG Discowl inline -->
+    <svg class="logo" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0cc0df"/>
+          <stop offset="100%" stop-color="#ffde59"/>
+        </linearGradient>
+      </defs>
+      <circle cx="32" cy="32" r="30" fill="#0f1117" stroke="url(#g1)" stroke-width="2.5"/>
+      <!-- Corps hibou -->
+      <ellipse cx="32" cy="38" rx="14" ry="16" fill="url(#g1)" opacity="0.15"/>
+      <ellipse cx="32" cy="38" rx="14" ry="16" fill="none" stroke="url(#g1)" stroke-width="1.8"/>
+      <!-- Tête -->
+      <circle cx="32" cy="24" r="12" fill="url(#g1)" opacity="0.15"/>
+      <circle cx="32" cy="24" r="12" fill="none" stroke="url(#g1)" stroke-width="1.8"/>
+      <!-- Yeux -->
+      <circle cx="27" cy="23" r="3.5" fill="url(#g1)"/>
+      <circle cx="37" cy="23" r="3.5" fill="url(#g1)"/>
+      <circle cx="26.5" cy="22.5" r="1.2" fill="#0f1117"/>
+      <circle cx="36.5" cy="22.5" r="1.2" fill="#0f1117"/>
+      <!-- Bec -->
+      <path d="M30 27 L32 30 L34 27 Z" fill="url(#g1)"/>
+      <!-- Oreilles -->
+      <path d="M22 15 L24 22 L28 18 Z" fill="url(#g1)" opacity="0.7"/>
+      <path d="M42 15 L40 22 L36 18 Z" fill="url(#g1)" opacity="0.7"/>
+    </svg>
+    <div class="brand">
+      <div class="brand-name">Discowl</div>
+      <div class="brand-version" id="ver">v—</div>
+    </div>
+  </div>
+
+  <div class="status-area">
+    <div class="status-text" id="status">Checking for updates…</div>
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar indeterminate" id="progress-bar"></div>
+    </div>
+  </div>
+
+  <script>
+    const statusEl   = document.getElementById('status');
+    const wrapEl     = document.getElementById('progress-wrap');
+    const barEl      = document.getElementById('progress-bar');
+    const verEl      = document.getElementById('ver');
+
+    function setStatus(txt) { statusEl.textContent = txt; }
+
+    function showIndeterminate() {
+      wrapEl.classList.add('visible');
+      barEl.classList.add('indeterminate');
+      barEl.style.width = '';
+    }
+
+    function showProgress(pct) {
+      wrapEl.classList.add('visible');
+      barEl.classList.remove('indeterminate');
+      barEl.style.width = pct + '%';
+    }
+
+    function hideProgress() {
+      wrapEl.classList.remove('visible');
+    }
+
+    // Lire la version depuis l'API
+    window.updaterAPI?.getVersion().then(v => {
+      verEl.textContent = 'v' + v;
+    });
+
+    // Démarrer en mode indéterminé
+    showIndeterminate();
+
+    // Écouter les événements du main process
+    window.updaterAPI?.onStatus((event) => {
+      switch (event.type) {
+
+        case 'checking':
+          setStatus('Checking for updates…');
+          showIndeterminate();
+          break;
+
+        case 'not-available':
+          setStatus('Up to date. Launching…');
+          hideProgress();
+          break;
+
+        case 'available':
+          setStatus(`Update ${event.version} available — downloading…`);
+          showProgress(0);
+          break;
+
+        case 'progress':
+          setStatus(`Downloading update ${event.version}… ${event.percent}%`);
+          showProgress(event.percent);
+          break;
+
+        case 'downloaded':
+          setStatus(`Update ${event.version} ready — installing…`);
+          showProgress(100);
+          break;
+
+        case 'error':
+          setStatus('Update check failed — launching…');
+          hideProgress();
+          break;
+      }
+    });
+  </script>
+</body>
+</html>

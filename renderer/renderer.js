@@ -555,10 +555,10 @@ function updateReloadBtn(isLoading) {
   if (!btn || !icon) return;
   if (isLoading) {
     btn.title = 'Stop (Esc)';
-    icon.innerHTML = `<path d="M4 4l10 10M14 4L4 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`;
+    icon.innerHTML = `<path d="M5 5l8 8M13 5l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`;
   } else {
     btn.title = 'Reload (F5)';
-    icon.innerHTML = `<path d="M3 9a6 6 0 106-6H6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M2 5l4 1-1 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    icon.innerHTML = `<path d="M13.5 4.5A6 6 0 1014.8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M11 2l3 2.5-2.5 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`;
   }
 }
 

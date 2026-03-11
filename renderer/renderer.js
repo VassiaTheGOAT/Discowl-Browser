@@ -462,6 +462,18 @@ function switchTab(id) {
   updateBookmarkStar(tab.url);
   updateZoomIndicator(tab);
   document.title = tab.title + ' — Discowl';
+
+  // Appliquer/réinitialiser le zoom de la newtab à chaque changement d'onglet
+  const inner = document.querySelector('.newtab-inner');
+  if (inner) {
+    if (!tab.url && tab.zoom && tab.zoom !== 1) {
+      inner.style.transform = `scale(${tab.zoom})`;
+      inner.style.transformOrigin = 'top center';
+    } else {
+      inner.style.transform = '';
+      inner.style.transformOrigin = '';
+    }
+  }
 }
 
 /* ─── Close a tab ────────────────────────────────────────────── */
@@ -910,11 +922,27 @@ function zoomActive(delta, reset = false) {
   if (!tab) return;
   if (reset) tab.zoom = 1;
   else tab.zoom = Math.max(0.3, Math.min(3, tab.zoom + delta));
-  try {
-    tab.webview.setZoomFactor(tab.zoom);
-    const pct = Math.round(tab.zoom * 100);
-    updateZoomIndicator(tab);
-  } catch {}
+
+  const ntpEl = document.getElementById('new-tab-page');
+  const isNewtab = !tab.url && ntpEl && !ntpEl.classList.contains('hidden');
+
+  if (isNewtab) {
+    // La home page est un div HTML — on zoome via CSS transform
+    const inner = document.querySelector('.newtab-inner');
+    if (inner) {
+      if (tab.zoom === 1) {
+        inner.style.transform = '';
+        inner.style.transformOrigin = '';
+      } else {
+        inner.style.transform = `scale(${tab.zoom})`;
+        inner.style.transformOrigin = 'top center';
+      }
+    }
+  } else {
+    try { tab.webview.setZoomFactor(tab.zoom); } catch {}
+  }
+
+  updateZoomIndicator(tab);
 }
 
 /* ══════════════════════════════════════════════════════════════

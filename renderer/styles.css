@@ -1747,3 +1747,109 @@ html[data-theme="light"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
 }
 .engine-custom-item:hover  { background: var(--bg-hover); }
 .engine-custom-item.active { background: var(--bg-input); color: var(--accent); }
+
+/* ════════════════════════════════════════════════════════════════
+   CUSTOM MENUBAR
+════════════════════════════════════════════════════════════════ */
+#menubar {
+  display: flex;
+  align-items: stretch;
+  height: 24px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  padding: 0 4px;
+  gap: 0;
+  -webkit-app-region: no-drag;
+  user-select: none;
+}
+
+.mb-item {
+  position: relative;
+}
+
+.mb-btn {
+  height: 24px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+
+.mb-btn:hover,
+.mb-item.open .mb-btn {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Dropdown ── */
+.mb-dropdown {
+  position: fixed;
+  z-index: 20000;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  padding: 4px 0;
+  min-width: 220px;
+  animation: menuIn .12s cubic-bezier(.4,0,.2,1);
+}
+
+.mb-dropdown.hidden { display: none; }
+
+.mb-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition);
+  border-radius: 0;
+}
+
+.mb-entry:hover { background: var(--bg-hover); }
+
+.mb-entry.danger       { color: var(--red, #ef4444); }
+.mb-entry.danger:hover { background: rgba(239,68,68,.1); }
+
+.mb-entry.disabled {
+  color: var(--text-muted);
+  cursor: default;
+  pointer-events: none;
+}
+
+.mb-icon {
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.mb-entry:hover .mb-icon { color: var(--text-primary); }
+.mb-entry.danger .mb-icon { color: var(--red, #ef4444); }
+
+.mb-entry span:nth-child(2) { flex: 1; }
+
+.mb-shortcut {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.mb-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 3px 8px;
+}

@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, session, shell, dialog, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, dialog, nativeTheme, Menu } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
@@ -45,6 +45,9 @@ const earlySettings = readSettingsSync();
 
 // Désactiver le GPU disk cache (évite les erreurs de permission Windows)
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+
+// Supprimer la menubar native — remplacée par menubar HTML custom
+Menu.setApplicationMenu(null);
 
 if (earlySettings.torEnabled) {
   console.log('[Main] torEnabled détecté avant ready → proxy Chromium configuré');

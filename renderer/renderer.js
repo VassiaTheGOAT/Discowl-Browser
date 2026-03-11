@@ -71,6 +71,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   applySettings(settings);
   updateTorIndicator();
   window.DownloadManager?.init();
+  initMenubar();
 
   // Nouvelles fenêtres demandées par des sites → ouvrir en onglet
   window.addEventListener('discowl:open-tab', (e) => {
@@ -804,6 +805,127 @@ function updateEngineUI() {
 /* ══════════════════════════════════════════════════════════════
    SANDWICH MENU
 ══════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════
+   CUSTOM MENUBAR
+══════════════════════════════════════════════════════════════ */
+function initMenubar() {
+  let openItem = null;
+
+  function closeAll() {
+    document.querySelectorAll('.mb-item.open').forEach(item => {
+      item.classList.remove('open');
+      item.querySelector('.mb-dropdown')?.classList.add('hidden');
+    });
+    openItem = null;
+  }
+
+  function openMenu(item) {
+    closeAll();
+    openItem = item;
+    item.classList.add('open');
+    const dropdown = item.querySelector('.mb-dropdown');
+    if (!dropdown) return;
+    dropdown.classList.remove('hidden');
+
+    // Positionner le dropdown sous le bouton
+    const btn  = item.querySelector('.mb-btn');
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.top  = rect.bottom + 'px';
+    dropdown.style.left = rect.left + 'px';
+  }
+
+  // Boutons de la menubar
+  document.querySelectorAll('.mb-item').forEach(item => {
+    const btn = item.querySelector('.mb-btn');
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (openItem === item) { closeAll(); }
+      else { openMenu(item); }
+    });
+    // Hover : changer de menu si un autre est déjà ouvert
+    btn.addEventListener('mouseenter', () => {
+      if (openItem && openItem !== item) openMenu(item);
+    });
+  });
+
+  // Fermer si clic en dehors
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#menubar')) closeAll();
+  });
+
+  // Fermer sur Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && openItem) { closeAll(); e.stopPropagation(); }
+  });
+
+  // ── Actions ──────────────────────────────────────────────────
+  function mb(action, fn) {
+    document.querySelectorAll(`[data-action="${action}"]`).forEach(el => {
+      el.addEventListener('click', () => { closeAll(); fn(); });
+    });
+  }
+
+  // File
+  mb('new-tab',          () => createTab('about:newtab', false));
+  mb('new-private',      () => createTab('about:newtab', true));
+  mb('open-url',         () => document.getElementById('url-bar')?.focus());
+  mb('save-page',        () => getActiveTab()?.webview?.downloadURL(getActiveTab()?.url));
+  mb('print',            () => getActiveTab()?.webview?.print?.());
+  mb('quit',             () => window.close());
+
+  // Edit
+  mb('find',             () => {
+    const tab = getActiveTab();
+    if (tab?.webview) tab.webview.executeJavaScript("window.find?.('') || document.execCommand?.('find')");
+  });
+  mb('cut',              () => document.execCommand('cut'));
+  mb('copy',             () => document.execCommand('copy'));
+  mb('paste',            () => document.execCommand('paste'));
+  mb('select-all',       () => document.execCommand('selectAll'));
+  mb('settings',         () => window.SettingsManager?.open());
+
+  // View
+  mb('zoom-in',          () => zoomActive(0.1));
+  mb('zoom-out',         () => zoomActive(-0.1));
+  mb('zoom-reset',       () => zoomActive(0, true));
+  mb('fullscreen',       () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  });
+  mb('toggle-bookmarks-bar', () => {
+    const bar = document.getElementById('bookmarks-toolbar');
+    if (bar) bar.classList.toggle('hidden');
+  });
+  mb('devtools',         () => getActiveTab()?.webview?.openDevTools());
+
+  // History
+  mb('back',             () => document.getElementById('back-btn')?.click());
+  mb('forward',          () => document.getElementById('forward-btn')?.click());
+  mb('show-history',     () => window.SidebarManager?.toggleRight());
+  mb('clear-history',    () => {
+    if (confirm('Clear all browsing history?')) window.HistoryManager?.clear();
+  });
+
+  // Bookmarks
+  mb('bookmark-page',    () => document.getElementById('bookmark-star-btn')?.click());
+  mb('show-bookmarks',   () => window.SidebarManager?.toggleLeft());
+
+  // Help
+  mb('about',            () => {
+    window.discowlAPI.app.getVersion().then(v => alert(`Discowl Browser v${v}\nA modern, privacy-focused browser.`));
+  });
+  mb('github',           () => window.discowlAPI.shell.openExternal('https://github.com/VassiaTheGOAT/Discowl-Browser'));
+  mb('check-updates',    async () => {
+    showToast('Checking for updates…', 'info');
+    try {
+      const result = await window.discowlAPI.updates.check();
+      if (result.upToDate) showToast('Already up to date ✓', 'success');
+      else showToast(`Update ${result.latest} available — restart to install`, 'info');
+    } catch { showToast('Could not check for updates', 'error'); }
+  });
+}
+
 function setupSandwichMenu() {
   const btn  = document.getElementById('sandwich-btn');
   const menu = document.getElementById('sandwich-menu');

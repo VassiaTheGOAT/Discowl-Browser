@@ -237,6 +237,7 @@ input, textarea {
   overflow: hidden;
   display: flex;
   align-items: flex-end;
+  min-width: 0;
 }
 
 #tabs-container {
@@ -244,9 +245,8 @@ input, textarea {
   align-items: flex-end;
   gap: 2px;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  width: 100%;
+  overflow: hidden;
   padding-bottom: 0;
 }
 
@@ -258,14 +258,14 @@ input, textarea {
   gap: 6px;
   padding: 0 10px;
   height: 30px;
-  min-width: 80px;
-  max-width: 200px;
+  flex: 1 1 150px;
+  min-width: 40px;
+  max-width: 150px;
   background: var(--bg-tab);
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: 7px 7px 0 0;
   cursor: pointer;
-  flex-shrink: 0;
   position: relative;
   -webkit-app-region: no-drag;
   transition: background var(--transition), color var(--transition);

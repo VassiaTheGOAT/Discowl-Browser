@@ -259,7 +259,7 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.0.6';
+      if (vEl) vEl.textContent = v || '1.0.7';
     }).catch(() => {});
 
     sec.appendChild(makeGroup('Application', [
@@ -272,11 +272,16 @@ const SettingsManager = (() => {
       })()),
       makeRow('Updates', 'Check for a newer version of Discowl',
         makeButton('Check now', 'settings-btn-secondary', async () => {
-          if (window.discowlAPI.updates) {
-            showToast('Checking for updates…', 'info');
-            await window.discowlAPI.updates.check();
-          } else {
-            showToast('Updates only available in packaged app', 'info');
+          showToast('Checking for updates…', 'info');
+          try {
+            const result = await window.discowlAPI.updates.check();
+            if (result.upToDate) {
+              showToast('Already up to date ✓', 'success');
+            } else {
+              showToast(`Update ${result.latest} available — restart the app to install`, 'info');
+            }
+          } catch (e) {
+            showToast('Could not check for updates', 'error');
           }
         })
       ),

@@ -24,11 +24,9 @@ class TorManager {
     const bin = process.platform === 'win32' ? 'tor.exe' : 'tor';
 
     if (app.isPackaged) {
-      // Chemin dans l'app packagée — asar.unpacked est à côté de app.asar
-      this.torBinPath = path.join(
-        process.resourcesPath,
-        'app.asar.unpacked', 'tor', 'tor', bin
-      );
+      // extraResources copie tor/ dans resources/tor/
+      // → C:\...\resources\tor\tor\tor.exe
+      this.torBinPath = path.join(process.resourcesPath, 'tor', 'tor', bin);
     } else {
       // Dev — chemin relatif au dossier source
       this.torBinPath = path.resolve(__dirname, '..', 'tor', 'tor', bin);

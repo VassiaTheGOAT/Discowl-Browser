@@ -38,7 +38,6 @@
       "components/**",
       "store/**",
       "assets/**",
-      "tor/**",
       "package.json"
     ],
 
@@ -61,6 +60,13 @@
     "linux": {
       "target": "AppImage",
       "icon":   "assets/icon.png"
-    }
+    },
+
+    "extraResources": [
+      {
+        "from": "tor",
+        "to": "tor"
+      }
+    ]
   }
 }

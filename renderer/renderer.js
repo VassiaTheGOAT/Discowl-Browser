@@ -145,7 +145,7 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   /* ─── Tab state ──────────────────────────────────────────── */
   const tab = {
     id,
-    title:     isPrivate ? 'Private tab' : 'New tab',
+    title:     isPrivate ? 'Private Home' : 'Home',
     url:       targetUrl === 'about:newtab' ? '' : targetUrl,
     favicon:   '',
     isPrivate,
@@ -217,6 +217,8 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   });
 
   webview.addEventListener('page-favicon-updated', (e) => {
+    // Ignorer si l'onglet est sur le newtab (pas d'URL = homepage)
+    if (!tab.url) return;
     if (e.favicons?.length) {
       tab.favicon = e.favicons[0];
       refreshTab(id);
@@ -279,12 +281,20 @@ function renderTabItem(tab) {
   faviconSlot.className = 'tab-favicon-slot';
   faviconSlot.style.cssText = 'width:14px;height:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
 
-  const faviconImg = document.createElement('img');
-  faviconImg.className = 'tab-favicon';
-  faviconImg.src = tab.favicon || '';
-  faviconImg.onerror = () => { faviconImg.style.display = 'none'; };
-  if (!tab.favicon) faviconImg.style.display = 'none';
-  faviconSlot.appendChild(faviconImg);
+  if (!tab.url) {
+    // Homepage — icône spéciale ou rien
+    if (tab.isPrivate) {
+      faviconSlot.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="12" y1="1" x2="2" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+    }
+    // else : rien pour la home normale
+  } else {
+    const faviconImg = document.createElement('img');
+    faviconImg.className = 'tab-favicon';
+    faviconImg.src = tab.favicon || '';
+    faviconImg.onerror = () => { faviconImg.style.display = 'none'; };
+    if (!tab.favicon) faviconImg.style.display = 'none';
+    faviconSlot.appendChild(faviconImg);
+  }
 
   const title = document.createElement('span');
   title.className = 'tab-title';
@@ -390,6 +400,13 @@ function refreshTab(id) {
   if (faviconSlot) {
     if (tab.isLoading) {
       faviconSlot.innerHTML = `<div class="tab-loading"></div>`;
+    } else if (!tab.url) {
+      // Homepage — icône spéciale selon le type, pas de favicon web
+      if (tab.isPrivate) {
+        faviconSlot.innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="12" y1="1" x2="2" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+      } else {
+        faviconSlot.innerHTML = ''; // Aucune icône pour la home normale
+      }
     } else {
       faviconSlot.innerHTML = '';
       const img = document.createElement('img');
@@ -433,7 +450,15 @@ function switchTab(id) {
   } else {
     dlPage?.classList.add('hidden');
     if (ntpEl) ntpEl.classList.toggle('hidden', !!tab.url);
-    if (!tab.url) updateNewtabMode(tab.isPrivate);
+    if (!tab.url) {
+      // Mettre à jour le titre selon le mode actuel (Tor peut avoir changé)
+      tab.title = tab.isPrivate
+        ? (settings.torEnabled ? 'Tor Home' : 'Private Home')
+        : 'Home';
+      refreshTab(tab.id);
+      updateNewtabMode(tab.isPrivate);
+      clearNewtabSearch();
+    }
   }
 
   updateUrlBar(tab.url);
@@ -491,11 +516,13 @@ function navigateActive(url, _fromVirtualBack = false) {
 
   if (resolved === 'about:newtab') {
     tab.webview.classList.remove('active');
-    tab.url   = '';
-    tab.title = tab.isPrivate ? 'Private tab' : 'New tab';
+    tab.url     = '';
+    tab.favicon = '';
+    tab.title   = tab.isPrivate ? (settings.torEnabled ? 'Tor Home' : 'Private Home') : 'Home';
     refreshTab(tab.id);
     if (ntpEl) ntpEl.classList.remove('hidden');
     updateNewtabMode(tab.isPrivate);
+    clearNewtabSearch();
     updateUrlBar('');
     // Activer le bouton back si on est venu d'une vraie page
     // (le retour vers newtab est possible via forward)
@@ -723,7 +750,7 @@ function setupToolbar() {
     // Fallback : lire l'URL depuis la barre si tab.url est vide
     const url = tab.url || document.getElementById('url-bar')?.value?.trim();
     if (!url || url === 'about:newtab' || url.startsWith('about:')) return;
-    const title = tab.title && tab.title !== 'New tab' && tab.title !== 'Private tab'
+    const title = tab.title && tab.title !== 'Home' && tab.title !== 'Private Home' && tab.title !== 'Tor Home'
       ? tab.title
       : url;
     window.BookmarksManager?.openStarPopup(title, url);
@@ -1107,7 +1134,11 @@ function setupNewTabPage() {
 
   document.getElementById('newtab-form')?.addEventListener('submit', (e) => { e.preventDefault(); doSearch(); });
   searchInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+}
 
+function clearNewtabSearch() {
+  const searchInput = document.getElementById('newtab-search-input');
+  if (searchInput) searchInput.value = '';
 }
 
 

@@ -13,12 +13,26 @@ class TorManager {
     this.torPort     = 9050;
 
     /*
-     * torManager.js  →  main/torManager.js
-     * tor binaire    →  <racine>/tor/tor/tor.exe
-     * __dirname = <racine>/main  → on remonte d'un cran
+     * En dev      : __dirname = <racine>/main  → tor est à <racine>/tor/tor/
+     * En packagé  : le binaire est extrait de l'asar via asarUnpack
+     *               dans <resources>/app.asar.unpacked/tor/tor/
+     *               process.resourcesPath pointe vers <resources>/
+     *
+     * On détecte app.isPackaged pour choisir le bon chemin.
      */
+    const { app } = require('electron');
     const bin = process.platform === 'win32' ? 'tor.exe' : 'tor';
-    this.torBinPath = path.resolve(__dirname, '..', 'tor', 'tor', bin);
+
+    if (app.isPackaged) {
+      // Chemin dans l'app packagée — asar.unpacked est à côté de app.asar
+      this.torBinPath = path.join(
+        process.resourcesPath,
+        'app.asar.unpacked', 'tor', 'tor', bin
+      );
+    } else {
+      // Dev — chemin relatif au dossier source
+      this.torBinPath = path.resolve(__dirname, '..', 'tor', 'tor', bin);
+    }
     console.log('[Tor] Chemin binaire :', this.torBinPath);
   }
 

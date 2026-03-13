@@ -1853,3 +1853,85 @@ html[data-theme="light"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
   background: var(--border);
   margin: 3px 8px;
 }
+
+/* ── Bookmarks v2 — racines système & drop indicator ── */
+.bm-item-system {
+  background: transparent;
+}
+.bm-item-system .bm-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.bm-item-system:hover {
+  background: var(--bg-hover);
+}
+#bm-drop-indicator {
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin: 0 8px;
+  pointer-events: none;
+}
+
+/* ── Lock Screen ────────────────────────────────────────────── */
+@keyframes lockShake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-8px); }
+  40%       { transform: translateX(8px); }
+  60%       { transform: translateX(-6px); }
+  80%       { transform: translateX(6px); }
+}
+
+/* ── Password form in Settings ──────────────────────────────── */
+.pw-form {
+  margin: 0 0 8px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.pw-form-inner {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.pw-input-wrap {
+  position: relative;
+  margin-top: 5px;
+}
+.pw-input-wrap .form-input {
+  width: 100%;
+  padding-right: 36px;
+  box-sizing: border-box;
+}
+.pw-eye-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+}
+.pw-strength-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+#pw-strength-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  transition: width .3s, background .3s;
+}
+.pw-strength-label {
+  font-size: 11px;
+  margin-top: 4px;
+  min-height: 14px;
+  font-weight: 500;
+}

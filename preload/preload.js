@@ -58,6 +58,14 @@ contextBridge.exposeInMainWorld('discowlAPI', {
   storage: {
     getDataPath: () => ipcRenderer.invoke('storage:getDataPath')
   },
+  /* ── Password / Lock ─────────────────────────────────────── */
+  password: {
+    isEnabled: ()      => ipcRenderer.invoke('password:isEnabled'),
+    setup:     (pwd)   => ipcRenderer.invoke('password:setup', pwd),
+    verify:    (pwd)   => ipcRenderer.invoke('password:verify', pwd),
+    disable:   (pwd)   => ipcRenderer.invoke('password:disable', pwd),
+  },
+
 
   /* ── Dialog ──────────────────────────────────────────────── */
   dialog: {

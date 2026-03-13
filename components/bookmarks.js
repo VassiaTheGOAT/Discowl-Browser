@@ -1,14 +1,13 @@
 /* ─── components/bookmarks.js ───────────────────────────────────
-   Système de favoris complet :
-   • Arborescence avec dossiers et sous-dossiers
-   • Barre personnelle (items avec toolbar:true)
-   • Star popup (style Firefox) depuis la barre URL
-   • Modal d'édition/ajout avec sélecteur de dossier destination
-   • Modal de création de dossier (sans prompt() natif)
-   • Drag & Drop pour réorganiser
-   • Persistance dans favorites.json via IPC
+   Système de favoris v2 :
+   • Deux dossiers racine indestructibles :
+       root-bar   → Bookmarks Bar (affiché dans la toolbar)
+       root-other → All Bookmarks (dossier général)
+   • Tri libre : drag-and-drop avec indicateur before/after/into
+   • Arborescence avec sous-dossiers illimités
+   • Star popup style Firefox
+   • Persistance via favorites.json
 ─────────────────────────────────────────────────────────────── */
-
 'use strict';
 
 const BookmarksManager = (() => {
@@ -16,9 +15,44 @@ const BookmarksManager = (() => {
   /* ══════════════════════════════════════════════════════════
      ÉTAT
   ══════════════════════════════════════════════════════════ */
-  let _bookmarks  = [];   // arborescence complète
-  let _editingId  = null; // id en cours d'édition (null = ajout)
+  let _bookmarks  = [];
+  let _editingId  = null;
   let _filterText = '';
+
+  const ROOT_BAR   = 'root-bar';
+  const ROOT_OTHER = 'root-other';
+
+  /* ══════════════════════════════════════════════════════════
+     RACINES SYSTÈME
+  ══════════════════════════════════════════════════════════ */
+  function makeRoots() {
+    return [
+      { id: ROOT_BAR,   title: 'Bookmarks Bar',  type: 'folder', system: true, open: true,  children: [] },
+      { id: ROOT_OTHER, title: 'All Bookmarks',  type: 'folder', system: true, open: false, children: [] },
+    ];
+  }
+
+  /** Assure que les deux racines système existent, migre les anciens bookmarks */
+  function ensureRoots(data) {
+    const hasBar   = data.some(x => x.id === ROOT_BAR);
+    const hasOther = data.some(x => x.id === ROOT_OTHER);
+
+    if (hasBar && hasOther) return data;
+
+    // Migration depuis l'ancien format plat
+    const roots  = makeRoots();
+    const barR   = roots[0];
+    const otherR = roots[1];
+
+    // Si les deux racines existent séparément mais sans les ids fixes, conserver
+    // Sinon répartir : toolbar:true → bar, reste → other
+    for (const item of data) {
+      if (item.id === ROOT_BAR || item.id === ROOT_OTHER) continue;
+      if (item.toolbar && item.type === 'bookmark') barR.children.push(item);
+      else otherR.children.push(item);
+    }
+    return roots;
+  }
 
   /* ══════════════════════════════════════════════════════════
      HELPERS
@@ -27,7 +61,6 @@ const BookmarksManager = (() => {
     return 'bm-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
   }
 
-  /** Parcours récursif en profondeur → tableau plat */
   function flatAll(items) {
     const out = [];
     for (const it of items) {
@@ -41,8 +74,8 @@ const BookmarksManager = (() => {
     for (const it of items) {
       if (it.id === id) return it;
       if (it.children?.length) {
-        const found = findById(it.children, id);
-        if (found) return found;
+        const f = findById(it.children, id);
+        if (f) return f;
       }
     }
     return null;
@@ -83,11 +116,38 @@ const BookmarksManager = (() => {
     return out;
   }
 
+  function getFolderOf(itemId) {
+    function search(items, parentId) {
+      for (const it of items) {
+        if (it.id === itemId) return parentId;
+        if (it.children?.length) {
+          const found = search(it.children, it.id);
+          if (found !== null) return found;
+        }
+      }
+      return null;
+    }
+    return search(_bookmarks, '') ?? ROOT_OTHER;
+  }
+
+  function isInBar(item) {
+    function search(items) {
+      for (const it of items) {
+        if (it.id === item.id) return true;
+        if (it.children?.length && search(it.children)) return true;
+      }
+      return false;
+    }
+    const barRoot = findById(_bookmarks, ROOT_BAR);
+    return barRoot ? search(barRoot.children) : false;
+  }
+
   /* ══════════════════════════════════════════════════════════
      PERSISTANCE
   ══════════════════════════════════════════════════════════ */
   async function load() {
-    _bookmarks = await window.discowlAPI.favorites.get();
+    const raw  = await window.discowlAPI.favorites.get();
+    _bookmarks = ensureRoots(Array.isArray(raw) ? raw : []);
     render();
     renderToolbar();
   }
@@ -97,19 +157,30 @@ const BookmarksManager = (() => {
   }
 
   /* ══════════════════════════════════════════════════════════
-     RENDU — ARBORESCENCE
+     RENDU — SIDEBAR
   ══════════════════════════════════════════════════════════ */
   function render() {
     const tree = document.getElementById('bookmarks-tree');
     if (!tree) return;
     const q = _filterText.toLowerCase().trim();
-    const items = q ? filterItems(_bookmarks, q) : _bookmarks;
+
     tree.innerHTML = '';
-    if (!items.length) {
-      tree.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">Aucun favori</div>`;
+    if (q) {
+      // Recherche — affichage plat filtré, sans les racines système
+      const all = flatAll(_bookmarks).filter(b =>
+        b.type === 'bookmark' &&
+        (b.title?.toLowerCase().includes(q) || b.url?.toLowerCase().includes(q))
+      );
+      if (!all.length) {
+        tree.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">No results</div>`;
+        return;
+      }
+      all.forEach(item => tree.appendChild(createBookmarkNode(item, 1)));
       return;
     }
-    items.forEach(item => tree.appendChild(createNode(item, 0)));
+
+    // Affichage normal — les deux racines système toujours en tête
+    _bookmarks.forEach(item => tree.appendChild(createNode(item, 0)));
   }
 
   function createNode(item, depth) {
@@ -121,6 +192,7 @@ const BookmarksManager = (() => {
     catch { return ''; }
   }
 
+  /* ── Bookmark node ── */
   function createBookmarkNode(item, depth) {
     const div = document.createElement('div');
     div.className = 'bm-item';
@@ -128,52 +200,112 @@ const BookmarksManager = (() => {
     div.title = item.url || '';
     div.style.paddingLeft = `${8 + depth * 16}px`;
 
-    // Favicon
     const fav = document.createElement('img');
     fav.style.cssText = 'width:14px;height:14px;flex-shrink:0;border-radius:2px;object-fit:contain';
     fav.src = faviconSrc(item.url);
     fav.onerror = () => { fav.replaceWith(makeSVGIcon()); };
 
-    // Titre
     const lbl = document.createElement('span');
     lbl.className = 'bm-label';
     lbl.textContent = item.title || item.url;
 
-    // Barre personnelle badge
-    if (item.toolbar) {
-      const badge = document.createElement('span');
-      badge.style.cssText = 'font-size:9px;color:var(--accent);flex-shrink:0;opacity:.7;letter-spacing:.02em';
-      badge.textContent = '●';
-      badge.title = 'Dans la barre personnelle';
-      div.appendChild(fav);
-      div.appendChild(lbl);
-      div.appendChild(badge);
-    } else {
-      div.appendChild(fav);
-      div.appendChild(lbl);
-    }
+    div.appendChild(fav);
+    div.appendChild(lbl);
 
-    // Actions (visibles au hover)
     const actions = document.createElement('div');
     actions.className = 'bm-actions';
-    actions.appendChild(makeActionBtn(
-      'Edit',
+    actions.appendChild(makeActionBtn('Edit',
       `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2L4 10H2V8L8.5 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
       (e) => { e.stopPropagation(); openEditModal(item); }
     ));
-    actions.appendChild(makeActionBtn(
-      'Delete',
+    actions.appendChild(makeActionBtn('Delete',
       `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M4 3V1.5h4V3m1 0l-.7 7H3.7L3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
       (e) => { e.stopPropagation(); deleteItem(item.id); },
       'delete'
     ));
     div.appendChild(actions);
 
-    // Navigation
     div.addEventListener('click', () => window.DiscowlBrowser?.navigate(item.url));
-
     setupDrag(div, item);
     return div;
+  }
+
+  /* ── Folder node ── */
+  function createFolderNode(item, depth) {
+    const wrap = document.createElement('div');
+    wrap.dataset.id = item.id;
+
+    const div = document.createElement('div');
+    div.className = 'bm-item' + (item.system ? ' bm-item-system' : '');
+    div.style.paddingLeft = `${8 + depth * 16}px`;
+
+    const chevron = document.createElement('span');
+    chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    chevron.className = 'bm-folder-toggle';
+    chevron.style.cssText = 'display:flex;align-items:center;flex-shrink:0;color:var(--text-muted);transition:transform .15s ease';
+
+    const icon = document.createElement('span');
+    icon.style.cssText = 'font-size:13px;flex-shrink:0';
+
+    const lbl = document.createElement('span');
+    lbl.className = 'bm-label';
+    lbl.textContent = item.title || 'Folder';
+    if (item.system) lbl.style.fontWeight = '600';
+
+    const actions = document.createElement('div');
+    actions.className = 'bm-actions';
+
+    // Bouton "Ajouter ici" — toujours présent
+    actions.appendChild(makeActionBtn('Add bookmark here',
+      `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+      (e) => { e.stopPropagation(); openAddModal(item.id); }
+    ));
+
+    if (!item.system) {
+      // Renommer — seulement les dossiers non-système
+      actions.appendChild(makeActionBtn('Rename',
+        `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2L4 10H2V8L8.5 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
+        (e) => { e.stopPropagation(); openFolderRenameModal(item); }
+      ));
+      // Supprimer — seulement non-système
+      actions.appendChild(makeActionBtn('Delete folder',
+        `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M4 3V1.5h4V3m1 0l-.7 7H3.7L3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+        (e) => { e.stopPropagation(); deleteItem(item.id); },
+        'delete'
+      ));
+    }
+
+    div.appendChild(chevron);
+    div.appendChild(icon);
+    div.appendChild(lbl);
+    div.appendChild(actions);
+
+    const children = document.createElement('div');
+    children.className = 'bm-folder-children';
+
+    // Ouvrir par défaut les racines système
+    let isOpen = !!item.open;
+    const applyOpen = () => {
+      children.classList.toggle('open', isOpen);
+      chevron.style.transform = isOpen ? 'rotate(90deg)' : '';
+      icon.textContent = isOpen ? '📂' : '📁';
+    };
+    applyOpen();
+
+    (item.children || []).forEach(child => children.appendChild(createNode(child, depth + 1)));
+
+    div.addEventListener('click', () => {
+      isOpen = !isOpen;
+      item.open = isOpen; // mémoriser l'état
+      applyOpen();
+    });
+
+    wrap.appendChild(div);
+    wrap.appendChild(children);
+
+    if (!item.system) setupDrag(div, item);
+    setupDropZone(div, item);
+    return wrap;
   }
 
   function makeSVGIcon() {
@@ -192,71 +324,6 @@ const BookmarksManager = (() => {
     return btn;
   }
 
-  function createFolderNode(item, depth) {
-    const wrap = document.createElement('div');
-    wrap.dataset.id = item.id;
-
-    const div = document.createElement('div');
-    div.className = 'bm-item';
-    div.style.paddingLeft = `${8 + depth * 16}px`;
-
-    // Chevron
-    const chevron = document.createElement('span');
-    chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    chevron.className = 'bm-folder-toggle';
-    chevron.style.cssText = 'display:flex;align-items:center;flex-shrink:0;color:var(--text-muted);transition:transform .15s ease';
-
-    const icon = document.createElement('span');
-    icon.textContent = '📁';
-    icon.style.cssText = 'font-size:13px;flex-shrink:0';
-
-    const lbl = document.createElement('span');
-    lbl.className = 'bm-label';
-    lbl.textContent = item.title || 'Folder';
-
-    const actions = document.createElement('div');
-    actions.className = 'bm-actions';
-    actions.appendChild(makeActionBtn(
-      'Add bookmark here',
-      `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
-      (e) => { e.stopPropagation(); openAddModal(item.id); }
-    ));
-    actions.appendChild(makeActionBtn(
-      'Rename',
-      `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2L4 10H2V8L8.5 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
-      (e) => { e.stopPropagation(); openFolderRenameModal(item); }
-    ));
-    actions.appendChild(makeActionBtn(
-      'Delete folder',
-      `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M4 3V1.5h4V3m1 0l-.7 7H3.7L3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-      (e) => { e.stopPropagation(); deleteItem(item.id); },
-      'delete'
-    ));
-
-    div.appendChild(chevron);
-    div.appendChild(icon);
-    div.appendChild(lbl);
-    div.appendChild(actions);
-
-    // Enfants
-    const children = document.createElement('div');
-    children.className = 'bm-folder-children';
-    (item.children || []).forEach(child => children.appendChild(createNode(child, depth + 1)));
-
-    let isOpen = false;
-    div.addEventListener('click', () => {
-      isOpen = !isOpen;
-      children.classList.toggle('open', isOpen);
-      chevron.style.transform = isOpen ? 'rotate(90deg)' : '';
-      icon.textContent = isOpen ? '📂' : '📁';
-    });
-
-    wrap.appendChild(div);
-    wrap.appendChild(children);
-    setupDrag(div, item);
-    return wrap;
-  }
-
   /* ══════════════════════════════════════════════════════════
      RENDU — BARRE PERSONNELLE
   ══════════════════════════════════════════════════════════ */
@@ -265,9 +332,12 @@ const BookmarksManager = (() => {
     if (!bar) return;
     bar.innerHTML = '';
 
-    const toolbarItems = flatAll(_bookmarks).filter(b => b.toolbar && b.type === 'bookmark');
+    const barRoot = findById(_bookmarks, ROOT_BAR);
+    if (!barRoot) return;
 
-    toolbarItems.forEach(item => {
+    // Afficher tous les items directs de la barre (profondeur 1 seulement pour éviter l'encombrement)
+    const items = flatAll(barRoot.children).filter(b => b.type === 'bookmark');
+    items.forEach(item => {
       const btn = document.createElement('button');
       btn.className = 'bm-toolbar-item';
       btn.title = item.url;
@@ -288,38 +358,29 @@ const BookmarksManager = (() => {
   }
 
   /* ══════════════════════════════════════════════════════════
-     STAR POPUP — style Firefox
-     S'ouvre ancré sous le bouton étoile dans la toolbar.
+     STAR POPUP
   ══════════════════════════════════════════════════════════ */
   function openStarPopup(title, url) {
-    closeStarPopup(); // ferme si déjà ouvert
+    closeStarPopup();
 
     const existing = flatAll(_bookmarks).find(b => b.url === url && b.type === 'bookmark');
     const isEdit   = !!existing;
+    const inBar    = existing ? isInBar(existing) : false;
 
-    // Créer le popup
     const popup = document.createElement('div');
     popup.id = 'star-popup';
     popup.style.cssText = `
-      position: fixed;
-      z-index: 10002;
-      width: 300px;
-      background: var(--bg-modal);
-      border: 1px solid var(--border-strong);
-      border-radius: 10px;
-      box-shadow: 0 16px 48px rgba(0,0,0,.6);
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      animation: menuIn .15s cubic-bezier(.4,0,.2,1);
+      position:fixed;z-index:10002;width:300px;
+      background:var(--bg-modal);border:1px solid var(--border-strong);
+      border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.6);
+      padding:16px;display:flex;flex-direction:column;gap:12px;
+      animation:menuIn .15s cubic-bezier(.4,0,.2,1);
     `;
 
-    // Positionner sous le bouton étoile
     const starBtn = document.getElementById('bookmark-star-btn');
     if (starBtn) {
       const rect = starBtn.getBoundingClientRect();
-      popup.style.top  = (rect.bottom + 6) + 'px';
+      popup.style.top   = (rect.bottom + 6) + 'px';
       popup.style.right = (window.innerWidth - rect.right) + 'px';
     }
 
@@ -337,7 +398,7 @@ const BookmarksManager = (() => {
     header.appendChild(closeBtn);
     popup.appendChild(header);
 
-    // Champ Nom
+    // Champ nom
     const nameLabel = document.createElement('label');
     nameLabel.style.cssText = 'display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--text-secondary)';
     nameLabel.textContent = 'Name';
@@ -350,51 +411,46 @@ const BookmarksManager = (() => {
     nameLabel.appendChild(nameInput);
     popup.appendChild(nameLabel);
 
-    // Sélecteur dossier destination
+    // Sélecteur dossier : racines système + tous sous-dossiers
     const folderLabel = document.createElement('label');
     folderLabel.style.cssText = 'display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--text-secondary)';
-    folderLabel.textContent = 'Folder';
+    folderLabel.textContent = 'Save in';
     const folderSelect = document.createElement('select');
     folderSelect.style.cssText = 'background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text-primary);font-size:12px;font-family:var(--font-ui);outline:none;cursor:pointer';
 
-    // Option racine
-    const rootOpt = document.createElement('option');
-    rootOpt.value = '';
-    rootOpt.textContent = '📚 Bookmarks (root)';
-    folderSelect.appendChild(rootOpt);
+    function addFolderOptions(items, depth) {
+      for (const it of items) {
+        if (it.type !== 'folder') continue;
+        const opt = document.createElement('option');
+        opt.value = it.id;
+        const prefix = depth === 0 ? (it.id === ROOT_BAR ? '⭐ ' : '📚 ') : '  '.repeat(depth) + '📁 ';
+        opt.textContent = prefix + it.title;
+        if (it.system) opt.style.fontWeight = '600';
+        folderSelect.appendChild(opt);
+        if (it.children?.length) addFolderOptions(it.children, depth + 1);
+      }
+    }
+    addFolderOptions(_bookmarks, 0);
 
-    // Tous les dossiers
-    const folders = flatAll(_bookmarks).filter(b => b.type === 'folder');
-    folders.forEach(f => {
-      const opt = document.createElement('option');
-      opt.value = f.id;
-      opt.textContent = '📁 ' + f.title;
-      folderSelect.appendChild(opt);
-    });
+    // Sélectionner le dossier courant si édition
+    if (isEdit) {
+      const currentFolder = getFolderOf(existing.id);
+      folderSelect.value = currentFolder || ROOT_OTHER;
+    } else {
+      folderSelect.value = ROOT_OTHER;
+    }
 
     folderLabel.appendChild(folderSelect);
     popup.appendChild(folderLabel);
-
-    // Checkbox barre personnelle
-    const toolbarRow = document.createElement('label');
-    toolbarRow.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);cursor:pointer';
-    const toolbarChk = document.createElement('input');
-    toolbarChk.type = 'checkbox';
-    toolbarChk.checked = isEdit ? !!existing.toolbar : false;
-    toolbarChk.style.cssText = 'accent-color:var(--accent);cursor:pointer;width:14px;height:14px';
-    toolbarRow.appendChild(toolbarChk);
-    toolbarRow.appendChild(document.createTextNode('Show in bookmarks bar'));
-    popup.appendChild(toolbarRow);
 
     // Boutons
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:2px';
 
     if (isEdit) {
-      // Bouton Supprimer
       const rmBtn = document.createElement('button');
       rmBtn.textContent = 'Delete';
-      rmBtn.style.cssText = 'padding:6px 14px;border-radius:6px;border:1px solid rgba(248,113,113,.3);background:transparent;color:var(--red);font-size:12px;font-family:var(--font-ui);cursor:pointer;transition:background .15s';
+      rmBtn.style.cssText = 'padding:6px 14px;border-radius:6px;border:1px solid rgba(248,113,113,.3);background:transparent;color:var(--red);font-size:12px;font-family:var(--font-ui);cursor:pointer';
       rmBtn.addEventListener('click', () => {
         deleteItem(existing.id);
         closeStarPopup();
@@ -406,37 +462,31 @@ const BookmarksManager = (() => {
 
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = 'padding:6px 14px;border-radius:6px;border:1px solid var(--border-strong);background:transparent;color:var(--text-secondary);font-size:12px;font-family:var(--font-ui);cursor:pointer;transition:background .15s';
+    cancelBtn.style.cssText = 'padding:6px 14px;border-radius:6px;border:1px solid var(--border-strong);background:transparent;color:var(--text-secondary);font-size:12px;font-family:var(--font-ui);cursor:pointer';
     cancelBtn.addEventListener('click', closeStarPopup);
 
     const saveBtn = document.createElement('button');
     saveBtn.textContent = isEdit ? 'Update' : 'Save';
-    saveBtn.style.cssText = 'padding:6px 14px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:12px;font-family:var(--font-ui);font-weight:500;cursor:pointer;transition:background .15s';
+    saveBtn.style.cssText = 'padding:6px 14px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:12px;font-family:var(--font-ui);font-weight:500;cursor:pointer';
     saveBtn.addEventListener('click', () => {
       const newName    = nameInput.value.trim() || url;
-      const newToolbar = toolbarChk.checked;
-      const destFolder = folderSelect.value;
+      const destFolder = folderSelect.value || ROOT_OTHER;
 
       if (isEdit) {
-        // Mettre à jour
-        updateById(_bookmarks, existing.id, { title: newName, toolbar: newToolbar });
-        // Si changement de dossier : déplacer
-        if (destFolder !== getFolderOf(existing.id)) {
+        const curFolder = getFolderOf(existing.id);
+        const updated   = { ...existing, title: newName, toolbar: destFolder === ROOT_BAR };
+        if (destFolder !== curFolder) {
           _bookmarks = removeById(_bookmarks, existing.id);
-          const updated = { ...existing, title: newName, toolbar: newToolbar };
-          if (destFolder) insertIntoFolder(_bookmarks, destFolder, updated);
-          else _bookmarks.push(updated);
+          insertIntoFolder(_bookmarks, destFolder, updated);
+        } else {
+          updateById(_bookmarks, existing.id, { title: newName, toolbar: destFolder === ROOT_BAR });
         }
       } else {
-        // Nouveau favori
-        const newItem = { id: uid(), title: newName, url, type: 'bookmark', toolbar: newToolbar, children: [] };
-        if (destFolder) insertIntoFolder(_bookmarks, destFolder, newItem);
-        else _bookmarks.push(newItem);
+        const newItem = { id: uid(), title: newName, url, type: 'bookmark', toolbar: destFolder === ROOT_BAR, children: [] };
+        insertIntoFolder(_bookmarks, destFolder, newItem);
       }
 
-      persist();
-      render();
-      renderToolbar();
+      persist(); render(); renderToolbar();
       closeStarPopup();
       updateStarBtn(url);
       showToast(isEdit ? 'Bookmark updated' : 'Bookmark saved', 'success');
@@ -447,21 +497,13 @@ const BookmarksManager = (() => {
     popup.appendChild(btnRow);
 
     document.body.appendChild(popup);
-
-    // Focus auto sur le nom
     setTimeout(() => nameInput.focus(), 50);
-
-    // Fermer si clic en dehors
-    setTimeout(() => {
-      document.addEventListener('mousedown', _starPopupOutsideClick);
-    }, 100);
+    setTimeout(() => document.addEventListener('mousedown', _starPopupOutsideClick), 100);
   }
 
   function _starPopupOutsideClick(e) {
     const popup = document.getElementById('star-popup');
-    if (popup && !popup.contains(e.target) && e.target.id !== 'bookmark-star-btn') {
-      closeStarPopup();
-    }
+    if (popup && !popup.contains(e.target) && e.target.id !== 'bookmark-star-btn') closeStarPopup();
   }
 
   function closeStarPopup() {
@@ -469,34 +511,19 @@ const BookmarksManager = (() => {
     document.removeEventListener('mousedown', _starPopupOutsideClick);
   }
 
-  /** Trouve dans quel dossier se trouve un item (retourne l'id du dossier ou '') */
-  function getFolderOf(itemId) {
-    function search(items, parentId) {
-      for (const it of items) {
-        if (it.id === itemId) return parentId;
-        if (it.children?.length) {
-          const found = search(it.children, it.id);
-          if (found !== null) return found;
-        }
-      }
-      return null;
-    }
-    return search(_bookmarks, '') ?? '';
-  }
-
   /* ══════════════════════════════════════════════════════════
-     MODAL — AJOUT / ÉDITION (depuis la sidebar)
+     MODAL — AJOUT / ÉDITION (sidebar)
   ══════════════════════════════════════════════════════════ */
   function openAddModal(parentId = null) {
     _editingId = null;
     const modal = document.getElementById('bookmark-modal');
     if (!modal) return;
     document.getElementById('bookmark-modal-title').textContent = 'Add bookmark';
-    document.getElementById('bm-name-input').value    = window.DiscowlBrowser?.getCurrentTitle() || '';
-    document.getElementById('bm-url-input').value     = window.DiscowlBrowser?.getCurrentUrl()   || '';
-    document.getElementById('bm-toolbar-check').checked = false;
+    document.getElementById('bm-name-input').value  = window.DiscowlBrowser?.getCurrentTitle() || '';
+    document.getElementById('bm-url-input').value   = window.DiscowlBrowser?.getCurrentUrl()   || '';
+    document.getElementById('bm-toolbar-check').checked = (parentId === ROOT_BAR);
     modal.classList.remove('hidden');
-    modal.dataset.parentId = parentId || '';
+    modal.dataset.parentId = parentId || ROOT_OTHER;
     document.getElementById('bm-name-input').focus();
     document.getElementById('bm-name-input').select();
   }
@@ -506,9 +533,9 @@ const BookmarksManager = (() => {
     const modal = document.getElementById('bookmark-modal');
     if (!modal) return;
     document.getElementById('bookmark-modal-title').textContent = 'Edit bookmark';
-    document.getElementById('bm-name-input').value    = item.title || '';
-    document.getElementById('bm-url-input').value     = item.url || '';
-    document.getElementById('bm-toolbar-check').checked = !!item.toolbar;
+    document.getElementById('bm-name-input').value  = item.title || '';
+    document.getElementById('bm-url-input').value   = item.url   || '';
+    document.getElementById('bm-toolbar-check').checked = isInBar(item);
     modal.classList.remove('hidden');
     modal.dataset.parentId = '';
     document.getElementById('bm-name-input').focus();
@@ -519,21 +546,28 @@ const BookmarksManager = (() => {
     const url      = document.getElementById('bm-url-input').value.trim();
     const toolbar  = document.getElementById('bm-toolbar-check').checked;
     const modal    = document.getElementById('bookmark-modal');
-    const parentId = modal?.dataset.parentId || null;
+    const parentId = modal?.dataset.parentId || ROOT_OTHER;
 
     if (!url) { showToast('URL required', 'error'); return; }
 
+    const destFolder = toolbar ? ROOT_BAR : (parentId || ROOT_OTHER);
+
     if (_editingId) {
-      updateById(_bookmarks, _editingId, { title: name || url, url, toolbar });
+      const curFolder = getFolderOf(_editingId);
+      const existing  = findById(_bookmarks, _editingId);
+      const updated   = { ...existing, title: name || url, url, toolbar };
+      if (destFolder !== curFolder) {
+        _bookmarks = removeById(_bookmarks, _editingId);
+        insertIntoFolder(_bookmarks, destFolder, updated);
+      } else {
+        updateById(_bookmarks, _editingId, { title: name || url, url, toolbar });
+      }
     } else {
       const newItem = { id: uid(), title: name || url, url, type: 'bookmark', toolbar, children: [] };
-      if (parentId) insertIntoFolder(_bookmarks, parentId, newItem);
-      else _bookmarks.push(newItem);
+      insertIntoFolder(_bookmarks, destFolder, newItem);
     }
 
-    persist();
-    render();
-    renderToolbar();
+    persist(); render(); renderToolbar();
     closeModal();
     updateStarBtn(url);
     showToast(_editingId ? 'Bookmark updated' : 'Bookmark added', 'success');
@@ -545,22 +579,17 @@ const BookmarksManager = (() => {
   }
 
   /* ══════════════════════════════════════════════════════════
-     MODAL — CRÉATION / RENOMMAGE DOSSIER
-     (Remplace l'affreux prompt() natif)
+     MODAL — DOSSIER
   ══════════════════════════════════════════════════════════ */
   let _folderEditingId = null;
 
   function openFolderModal(existingItem = null) {
     _folderEditingId = existingItem?.id || null;
-
-    // Créer la modal si elle n'existe pas encore
     let modal = document.getElementById('folder-modal');
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'folder-modal';
       modal.className = 'modal hidden';
-      modal.setAttribute('role', 'dialog');
-      modal.setAttribute('aria-modal', 'true');
       modal.innerHTML = `
         <div class="modal-overlay" id="folder-modal-overlay"></div>
         <div class="modal-box">
@@ -571,8 +600,11 @@ const BookmarksManager = (() => {
             </button>
           </div>
           <div class="modal-body">
-            <label class="form-label">Nom du dossier
+            <label class="form-label">Folder name
               <input id="folder-name-input" type="text" class="form-input" placeholder="My folder" autocomplete="off"/>
+            </label>
+            <label class="form-label" style="margin-top:10px">Parent
+              <select id="folder-parent-select" class="form-input"></select>
             </label>
           </div>
           <div class="modal-footer">
@@ -581,21 +613,49 @@ const BookmarksManager = (() => {
           </div>
         </div>`;
       document.body.appendChild(modal);
-
-      document.getElementById('folder-modal-close')?.addEventListener('click',  closeFolderModal);
-      document.getElementById('folder-modal-cancel')?.addEventListener('click', closeFolderModal);
+      document.getElementById('folder-modal-close')?.addEventListener('click',   closeFolderModal);
+      document.getElementById('folder-modal-cancel')?.addEventListener('click',  closeFolderModal);
       document.getElementById('folder-modal-overlay')?.addEventListener('click', closeFolderModal);
-      document.getElementById('folder-modal-save')?.addEventListener('click',   saveFolderModal);
+      document.getElementById('folder-modal-save')?.addEventListener('click',    saveFolderModal);
       document.getElementById('folder-name-input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') saveFolderModal();
         if (e.key === 'Escape') closeFolderModal();
       });
     }
 
+    // Remplir le sélecteur de parent
+    const sel = document.getElementById('folder-parent-select');
+    if (sel) {
+      sel.innerHTML = '';
+      function addOpts(items, depth) {
+        for (const it of items) {
+          if (it.type !== 'folder') continue;
+          if (_folderEditingId && it.id === _folderEditingId) continue;
+          const opt = document.createElement('option');
+          opt.value = it.id;
+          const prefix = depth === 0 ? (it.id === ROOT_BAR ? '⭐ ' : '📚 ') : '  '.repeat(depth) + '📁 ';
+          opt.textContent = prefix + it.title;
+          if (it.system) opt.style.fontWeight = '600';
+          sel.appendChild(opt);
+          if (it.children?.length) addOpts(it.children, depth + 1);
+        }
+      }
+      addOpts(_bookmarks, 0);
+      sel.value = ROOT_OTHER;
+    }
+
     document.getElementById('folder-modal-title').textContent = existingItem ? 'Rename folder' : 'New folder';
     document.getElementById('folder-modal-save').textContent  = existingItem ? 'Rename' : 'Create';
     const input = document.getElementById('folder-name-input');
     input.value = existingItem?.title || '';
+    if (existingItem) {
+      // Cacher le parent pour le renommage
+      const parentRow = document.getElementById('folder-parent-select')?.closest('label');
+      if (parentRow) parentRow.style.display = 'none';
+    } else {
+      const parentRow = document.getElementById('folder-parent-select')?.closest('label');
+      if (parentRow) parentRow.style.display = '';
+    }
     modal.classList.remove('hidden');
     setTimeout(() => { input.focus(); input.select(); }, 50);
   }
@@ -610,12 +670,13 @@ const BookmarksManager = (() => {
       updateById(_bookmarks, _folderEditingId, { title: name });
       showToast('Folder renamed', 'success');
     } else {
-      _bookmarks.push({ id: uid(), title: name, type: 'folder', toolbar: false, children: [] });
+      const parentId = document.getElementById('folder-parent-select')?.value || ROOT_OTHER;
+      const newFolder = { id: uid(), title: name, type: 'folder', system: false, open: false, children: [] };
+      insertIntoFolder(_bookmarks, parentId, newFolder);
       showToast('Folder created', 'success');
     }
 
-    persist();
-    render();
+    persist(); render();
     closeFolderModal();
     _folderEditingId = null;
   }
@@ -629,28 +690,26 @@ const BookmarksManager = (() => {
      CRUD
   ══════════════════════════════════════════════════════════ */
   function deleteItem(id) {
+    const item = findById(_bookmarks, id);
+    if (item?.system) { showToast('Cannot delete system folder', 'error'); return; }
     _bookmarks = removeById(_bookmarks, id);
-    persist();
-    render();
-    renderToolbar();
+    persist(); render(); renderToolbar();
     showToast('Deleted', 'info');
   }
 
   /* ══════════════════════════════════════════════════════════
-     ÉTOILE — état visuel
+     ÉTOILE
   ══════════════════════════════════════════════════════════ */
   function isBookmarked(url) {
     return flatAll(_bookmarks).some(b => b.type === 'bookmark' && b.url === url);
   }
 
-  /** Met à jour l'étoile dans la barre URL */
   function updateStarBtn(url) {
     const btn = document.getElementById('bookmark-star-btn');
     if (!btn) return;
     const marked = isBookmarked(url);
     btn.classList.toggle('bookmarked', marked);
     btn.title = marked ? 'Edit / Remove bookmark' : 'Add to bookmarks';
-    // filled si bookmarked, outline sinon
     const svg = document.getElementById('star-icon') || btn.querySelector('svg');
     if (svg) {
       svg.innerHTML = marked
@@ -660,26 +719,85 @@ const BookmarksManager = (() => {
   }
 
   /* ══════════════════════════════════════════════════════════
-     DRAG & DROP
+     DRAG & DROP — with before/after indicator
   ══════════════════════════════════════════════════════════ */
+  let _dragId = null;
+  let _dropIndicator = null;
+
+  function getOrCreateIndicator() {
+    if (!_dropIndicator) {
+      _dropIndicator = document.createElement('div');
+      _dropIndicator.style.cssText = 'height:2px;background:var(--accent);border-radius:2px;margin:0 8px;pointer-events:none;transition:opacity .1s';
+      _dropIndicator.id = 'bm-drop-indicator';
+    }
+    return _dropIndicator;
+  }
+
+  function hideIndicator() {
+    document.getElementById('bm-drop-indicator')?.remove();
+  }
+
   function setupDrag(el, item) {
     el.draggable = true;
     el.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', item.id);
+      _dragId = item.id;
+      e.dataTransfer.effectAllowed = 'move';
       el.style.opacity = '.45';
     });
-    el.addEventListener('dragend',  () => { el.style.opacity = ''; el.style.background = ''; });
-    el.addEventListener('dragover', (e) => { e.preventDefault(); el.style.background = 'rgba(230,108,44,.1)'; });
-    el.addEventListener('dragleave', () => { el.style.background = ''; });
-    el.addEventListener('drop', (e) => {
-      e.preventDefault();
-      el.style.background = '';
-      const fromId = e.dataTransfer.getData('text/plain');
-      if (fromId && fromId !== item.id) moveItem(fromId, item.id);
+    el.addEventListener('dragend', () => {
+      el.style.opacity = '';
+      hideIndicator();
+      _dragId = null;
     });
   }
 
-  function moveItem(fromId, toId) {
+  function setupDropZone(el, item) {
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (!_dragId || _dragId === item.id) return;
+      const rect   = el.getBoundingClientRect();
+      const isTop  = e.clientY < rect.top + rect.height / 2;
+      const ind    = getOrCreateIndicator();
+
+      if (item.type === 'folder' && !isTop) {
+        // Drop INTO folder
+        hideIndicator();
+        el.style.outline = '1.5px solid var(--accent)';
+        el.dataset.dropMode = 'into';
+      } else {
+        el.style.outline = '';
+        el.dataset.dropMode = isTop ? 'before' : 'after';
+        // Insert indicator
+        if (isTop) el.parentNode?.insertBefore(ind, el);
+        else el.parentNode?.insertBefore(ind, el.nextSibling);
+      }
+    });
+
+    el.addEventListener('dragleave', () => {
+      el.style.outline = '';
+      delete el.dataset.dropMode;
+    });
+
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.style.outline = '';
+      const mode = el.dataset.dropMode || 'after';
+      delete el.dataset.dropMode;
+      hideIndicator();
+      if (!_dragId || _dragId === item.id) return;
+      moveItem(_dragId, item.id, mode);
+    });
+  }
+
+  function moveItem(fromId, toId, mode = 'after') {
+    // Empêcher de déplacer une racine système
+    const fromItem = findById(_bookmarks, fromId);
+    if (fromItem?.system) return;
+    // Empêcher de déplacer dans ses propres enfants
+    if (fromItem?.type === 'folder') {
+      if (findById(fromItem.children || [], toId)) return;
+    }
+
     let moved = null;
     function extract(items) {
       for (let i = 0; i < items.length; i++) {
@@ -690,16 +808,26 @@ const BookmarksManager = (() => {
     extract(_bookmarks);
     if (!moved) return;
 
-    function insertAfter(items, tid) {
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].id === tid) { items.splice(i + 1, 0, moved); return true; }
-        if (items[i].children && insertAfter(items[i].children, tid)) return true;
+    if (mode === 'into') {
+      // Insérer dans le dossier cible
+      insertIntoFolder(_bookmarks, toId, moved);
+    } else {
+      // Insérer before ou after toId
+      function insertRelative(items) {
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].id === toId) {
+            const pos = mode === 'before' ? i : i + 1;
+            items.splice(pos, 0, moved);
+            return true;
+          }
+          if (items[i].children && insertRelative(items[i].children)) return true;
+        }
+        return false;
       }
+      if (!insertRelative(_bookmarks)) _bookmarks.push(moved);
     }
-    insertAfter(_bookmarks, toId);
-    persist();
-    render();
-    renderToolbar();
+
+    persist(); render(); renderToolbar();
   }
 
   /* ══════════════════════════════════════════════════════════
@@ -708,49 +836,34 @@ const BookmarksManager = (() => {
   function init() {
     load();
 
-    // Recherche
     document.getElementById('bookmarks-search')?.addEventListener('input', (e) => {
       _filterText = e.target.value;
       render();
     });
 
-    // Bouton "Ajouter un favori" dans la sidebar
     document.getElementById('add-bookmark-btn')?.addEventListener('click', () => openAddModal());
+    document.getElementById('add-folder-btn')?.addEventListener('click',   () => openFolderModal());
 
-    // Bouton "Nouveau dossier" dans la sidebar → modal propre, plus de prompt()
-    document.getElementById('add-folder-btn')?.addEventListener('click', () => openFolderModal());
-
-    // Modal favori — sauvegarder
-    document.getElementById('bookmark-modal-save')?.addEventListener('click', saveFromModal);
+    document.getElementById('bookmark-modal-save')?.addEventListener('click',   saveFromModal);
     document.getElementById('bookmark-modal-cancel')?.addEventListener('click', closeModal);
-    document.getElementById('bookmark-modal-close')?.addEventListener('click', closeModal);
+    document.getElementById('bookmark-modal-close')?.addEventListener('click',  closeModal);
     document.querySelector('.modal-overlay')?.addEventListener('click', closeModal);
     document.getElementById('bm-name-input')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') saveFromModal();
       if (e.key === 'Escape') closeModal();
     });
 
-    // Mise à jour en direct depuis le processus main (autre fenêtre, etc.)
     window.discowlAPI.favorites.onUpdated((data) => {
-      _bookmarks = data;
+      _bookmarks = ensureRoots(Array.isArray(data) ? data : []);
       render();
       renderToolbar();
     });
   }
 
-  /* ══════════════════════════════════════════════════════════
-     API PUBLIQUE
-  ══════════════════════════════════════════════════════════ */
   return {
-    init,
-    load,
-    render,
-    renderToolbar,
-    openAddModal,
-    openStarPopup,    // appelé par renderer.js via l'étoile
-    closeStarPopup,
-    isBookmarked,
-    updateStarBtn,
+    init, load, render, renderToolbar,
+    openAddModal, openStarPopup, closeStarPopup,
+    isBookmarked, updateStarBtn,
     getAll: () => _bookmarks
   };
 

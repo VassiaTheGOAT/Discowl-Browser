@@ -39,6 +39,7 @@ const SettingsManager = (() => {
     buildPrivacy();
     buildNetwork();
     buildTor();
+    buildSecurity();
   }
 
   /* ── Toggle helper ─────────────────────────────────────────── */
@@ -260,7 +261,7 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.1.2';
+      if (vEl) vEl.textContent = v || '1.1.5';
     }).catch(() => {});
 
     sec.appendChild(makeGroup('Application', [
@@ -529,6 +530,216 @@ const SettingsManager = (() => {
   }
 
   return { init, load, open, close };
+
+  /* ── Security ──────────────────────────────────────────────── */
+  function buildSecurity() {
+    const sec = document.getElementById('settings-security');
+    if (!sec) return;
+    sec.innerHTML = ''; // Toujours reconstruire proprement
+
+    // Header
+    sec.appendChild((() => {
+      const h = document.createElement('div');
+      h.className = 'settings-section-header';
+      h.innerHTML = '<h2>Security</h2><p>Protect access to Discowl with a master password.</p>';
+      return h;
+    })());
+
+    let _pwEnabled = false;
+
+    /* ── Toggle row ── */
+    const toggleRow  = document.createElement('div');
+    toggleRow.className = 'settings-row';
+
+    const toggleLeft = document.createElement('div');
+    toggleLeft.className = 'settings-row-left';
+    toggleLeft.innerHTML = `
+      <div class="settings-row-label">Use a master password</div>
+      <div class="settings-row-desc">A password will be required every time you open Discowl.</div>`;
+
+    const chk = makeToggle('pw-enabled-toggle', false, (checked) => {
+      if (checked) {
+        chk.checked = false;            // validé seulement après soumission
+        setupForm.style.display    = 'block';
+        disableForm.style.display  = 'none';
+        pwInput.value = '';
+        pwConfirm.value = '';
+        updateStrength('');
+        pwInput.focus();
+      } else if (_pwEnabled) {
+        chk.checked = true;             // reste coché jusqu'à vérification
+        setupForm.style.display    = 'none';
+        disableForm.style.display  = 'block';
+        disablePwInput.value = '';
+        disablePwInput.focus();
+      }
+    });
+
+    toggleRow.appendChild(toggleLeft);
+    toggleRow.appendChild(chk);
+    sec.appendChild(toggleRow);
+
+    /* ── Setup form ── */
+    const setupForm = document.createElement('div');
+    setupForm.className = 'pw-form';
+    setupForm.style.display = 'none';
+    setupForm.innerHTML = `
+      <div class="pw-form-inner">
+        <label class="form-label">New password
+          <div class="pw-input-wrap">
+            <input id="pw-new-input" type="password" class="form-input" placeholder="Enter password" autocomplete="new-password"/>
+            <button class="pw-eye-btn" data-target="pw-new-input" title="Show/hide">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5C1 7.5 3.5 3 7.5 3s6.5 4.5 6.5 4.5S12 12 7.5 12 1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
+            </button>
+          </div>
+        </label>
+        <div class="pw-strength-bar"><div id="pw-strength-fill"></div></div>
+        <div id="pw-strength-label" class="pw-strength-label"></div>
+        <label class="form-label" style="margin-top:10px">Confirm password
+          <div class="pw-input-wrap">
+            <input id="pw-confirm-input" type="password" class="form-input" placeholder="Repeat password" autocomplete="new-password"/>
+            <button class="pw-eye-btn" data-target="pw-confirm-input" title="Show/hide">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5C1 7.5 3.5 3 7.5 3s6.5 4.5 6.5 4.5S12 12 7.5 12 1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
+            </button>
+          </div>
+        </label>
+        <div id="pw-match-label" class="pw-strength-label"></div>
+        <button id="pw-setup-btn" class="btn btn-primary" style="margin-top:12px;width:100%">Enable password</button>
+      </div>`;
+    sec.appendChild(setupForm);
+
+    const pwInput       = document.getElementById('pw-new-input');
+    const pwConfirm     = document.getElementById('pw-confirm-input');
+    const strengthFill  = document.getElementById('pw-strength-fill');
+    const strengthLabel = document.getElementById('pw-strength-label');
+    const matchLabel    = document.getElementById('pw-match-label');
+
+    function updateStrength(val) {
+      if (!strengthFill || !strengthLabel) return;
+      let score = 0;
+      if (val.length >= 8)             score++;
+      if (val.length >= 12)            score++;
+      if (/[A-Z]/.test(val))           score++;
+      if (/[0-9]/.test(val))           score++;
+      if (/[^A-Za-z0-9]/.test(val))    score++;
+      if (!val) { strengthFill.style.width = '0'; strengthLabel.textContent = ''; return; }
+      const levels = ['','Very weak','Weak','Fair','Strong','Very strong'];
+      const colors = ['','#ef4444','#f97316','#eab308','#22c55e','#10b981'];
+      strengthFill.style.width      = (score / 5 * 100) + '%';
+      strengthFill.style.background = colors[score] || '#ef4444';
+      strengthLabel.textContent     = levels[score] || 'Very weak';
+      strengthLabel.style.color     = colors[score] || '#ef4444';
+    }
+
+    function checkMatch() {
+      if (!matchLabel || !pwConfirm?.value) { if (matchLabel) matchLabel.textContent = ''; return; }
+      if (pwInput.value === pwConfirm.value) {
+        matchLabel.textContent = '✓ Passwords match';
+        matchLabel.style.color = '#22c55e';
+      } else {
+        matchLabel.textContent = '✗ Passwords do not match';
+        matchLabel.style.color = '#ef4444';
+      }
+    }
+
+    pwInput?.addEventListener('input',  () => { updateStrength(pwInput.value); if (pwConfirm?.value) checkMatch(); });
+    pwConfirm?.addEventListener('input', checkMatch);
+
+    setupForm.querySelectorAll('.pw-eye-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const inp = document.getElementById(btn.dataset.target);
+        if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+      });
+    });
+
+    document.getElementById('pw-setup-btn')?.addEventListener('click', async () => {
+      const pwd = pwInput?.value || '';
+      const cnf = pwConfirm?.value || '';
+      if (!pwd)          { showToast('Enter a password', 'error'); return; }
+      if (pwd !== cnf)   { showToast('Passwords do not match', 'error'); return; }
+      if (pwd.length < 6){ showToast('Minimum 6 characters', 'error'); return; }
+
+      const btn = document.getElementById('pw-setup-btn');
+      btn.textContent = 'Hashing… (may take a moment)';
+      btn.disabled = true;
+      try {
+        await window.discowlAPI.password.setup(pwd);
+        _pwEnabled = true;
+        chk.checked = true;
+        setupForm.style.display = 'none';
+        if (pwInput)   pwInput.value   = '';
+        if (pwConfirm) pwConfirm.value = '';
+        showToast('Password enabled ✓', 'success');
+      } catch(e) {
+        showToast('Error: ' + e.message, 'error');
+      } finally {
+        btn.textContent = 'Enable password';
+        btn.disabled = false;
+      }
+    });
+
+    /* ── Disable form ── */
+    const disableForm = document.createElement('div');
+    disableForm.className = 'pw-form';
+    disableForm.style.display = 'none';
+    disableForm.innerHTML = `
+      <div class="pw-form-inner">
+        <label class="form-label">Enter current password to disable
+          <div class="pw-input-wrap">
+            <input id="pw-disable-input" type="password" class="form-input" placeholder="Current password" autocomplete="current-password"/>
+            <button class="pw-eye-btn" data-target="pw-disable-input" title="Show/hide">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5C1 7.5 3.5 3 7.5 3s6.5 4.5 6.5 4.5S12 12 7.5 12 1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
+            </button>
+          </div>
+        </label>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button id="pw-disable-cancel" class="btn btn-secondary" style="flex:1">Cancel</button>
+          <button id="pw-disable-btn"    class="btn btn-primary"   style="flex:1;background:var(--red);border-color:var(--red)">Disable</button>
+        </div>
+      </div>`;
+    sec.appendChild(disableForm);
+
+    const disablePwInput = document.getElementById('pw-disable-input');
+
+    disableForm.querySelector('.pw-eye-btn')?.addEventListener('click', () => {
+      if (disablePwInput) disablePwInput.type = disablePwInput.type === 'password' ? 'text' : 'password';
+    });
+    document.getElementById('pw-disable-cancel')?.addEventListener('click', () => {
+      disableForm.style.display = 'none';
+      chk.checked = true;
+    });
+
+    async function doDisable() {
+      const pwd = disablePwInput?.value || '';
+      if (!pwd) { showToast('Enter your current password', 'error'); return; }
+      const btn = document.getElementById('pw-disable-btn');
+      btn.textContent = 'Verifying…'; btn.disabled = true;
+      try {
+        const res = await window.discowlAPI.password.disable(pwd);
+        if (res.ok) {
+          _pwEnabled = false;
+          chk.checked = false;
+          disableForm.style.display = 'none';
+          if (disablePwInput) disablePwInput.value = '';
+          showToast('Password disabled', 'success');
+        } else {
+          showToast('Incorrect password ✗', 'error');
+          if (disablePwInput) { disablePwInput.value = ''; disablePwInput.focus(); }
+        }
+      } catch(e) { showToast('Error: ' + e.message, 'error'); }
+      finally { btn.textContent = 'Disable'; btn.disabled = false; }
+    }
+
+    document.getElementById('pw-disable-btn')?.addEventListener('click', doDisable);
+    disablePwInput?.addEventListener('keydown', e => { if (e.key === 'Enter') doDisable(); });
+
+    /* ── Init état ── */
+    window.discowlAPI.password.isEnabled().then(v => {
+      _pwEnabled = v;
+      const input = chk.querySelector('input');
+      if (input) input.checked = v;
+    });
+  }
 
 })();
 

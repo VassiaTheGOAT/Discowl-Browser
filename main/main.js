@@ -5,7 +5,8 @@ const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
 
-const TorManager    = require('./torManager');
+const TorManager      = require('./torManager');
+const passwordManager = require('./passwordManager');
 const { runUpdater, registerIpc: registerUpdaterIpc } = require('./updater');
 const Storage    = require('../store/storage');
 
@@ -43,7 +44,60 @@ function readSettingsSync() {
 ══════════════════════════════════════════════════════════════ */
 const earlySettings = readSettingsSync();
 
-// Désactiver le GPU disk cache (évite les erreurs de permission Windows)
+// ── Cache / Storage cleanup ────────────────────────────────────
+// Les erreurs "Unable to move the cache" et "Failed to delete the database"
+// viennent toutes du dossier Partitions/persist_main/ de Chromium :
+//
+//   Cache/               → migration de format → Access Denied
+//   GPUCache/            → idem
+//   Service Worker/      → quota_database SQLite corrompu/verrouillé
+//   QuotaManager(-journal) → idem
+//
+// On supprime ces fichiers VOLATILS avant que Chromium ne les ouvre.
+// On préserve Cookies, Local Storage, IndexedDB (données utilisateur).
+{
+  let userDataBase;
+  if (process.platform === 'win32') {
+    userDataBase = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+  } else if (process.platform === 'darwin') {
+    userDataBase = path.join(os.homedir(), 'Library', 'Application Support');
+  } else {
+    userDataBase = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  }
+
+  const base    = path.join(userDataBase, 'discowl-browser');
+  const partDir = path.join(base, 'Partitions', 'persist_main');
+
+  // Dossiers/fichiers à supprimer (volatils — recréés automatiquement)
+  const toDelete = [
+    path.join(base,    'Cache'),
+    path.join(base,    'Cache_Data'),
+    path.join(base,    'GPUCache'),
+    path.join(base,    'Code Cache'),
+    path.join(partDir, 'Cache'),
+    path.join(partDir, 'Cache_Data'),
+    path.join(partDir, 'GPUCache'),
+    path.join(partDir, 'Code Cache'),
+    path.join(partDir, 'Service Worker'),
+    path.join(partDir, 'QuotaManager'),
+    path.join(partDir, 'QuotaManager-journal'),
+    path.join(partDir, 'databases'),
+    path.join(partDir, 'blob_storage'),
+  ];
+
+  let cleaned = 0;
+  for (const target of toDelete) {
+    try {
+      if (fs.existsSync(target)) {
+        fs.rmSync(target, { recursive: true, force: true });
+        cleaned++;
+      }
+    } catch { /* verrouillé — Chromium gèrera */ }
+  }
+  if (cleaned > 0) console.log(`[Cache] ${cleaned} dossier(s) volatils nettoyés`);
+}
+
+// Désactiver le GPU disk cache et le shader cache
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
 // Supprimer la menubar native — remplacée par menubar HTML custom
@@ -130,6 +184,33 @@ function createWindow() {
   });
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   mainWindow.on('closed', () => { mainWindow = null; });
+
+  // ── Intercepter les nouvelles fenêtres dans TOUS les webviews ─
+  app.on('web-contents-created', (event, contents) => {
+    if (contents.getType() !== 'webview') return;
+
+    // setWindowOpenHandler : window.open / target=_blank / disposition new-window
+    contents.setWindowOpenHandler(({ url, disposition }) => {
+      if (url && url !== 'about:blank' && url !== 'about:blank#blocked') {
+        mainWindow?.webContents.send('open-url-in-tab', url);
+      }
+      return { action: 'deny' };
+    });
+
+    // will-navigate avec disposition new-window (certains sites)
+    contents.on('will-navigate', (e, url) => {
+      // navigation normale dans l'onglet — laisser passer
+    });
+
+    // did-create-window : si une vraie fenêtre est quand même créée, la fermer
+    // et l'ouvrir en onglet
+    contents.on('did-create-window', (win, { url }) => {
+      win.destroy();
+      if (url && url !== 'about:blank') {
+        mainWindow?.webContents.send('open-url-in-tab', url);
+      }
+    });
+  });
 
   // ── Interception des téléchargements ────────────────────────
   // Les webviews utilisent fromPartition('persist:main') — PAS defaultSession
@@ -264,3 +345,12 @@ ipcMain.handle('dialog:openDirectory', async () => {
   const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
 });
+
+
+/* ══════════════════════════════════════════════════════════════
+   PASSWORD IPC
+══════════════════════════════════════════════════════════════ */
+ipcMain.handle('password:isEnabled', ()           => passwordManager.isEnabled());
+ipcMain.handle('password:setup',     (_, pwd)     => passwordManager.setup(pwd));
+ipcMain.handle('password:verify',    (_, pwd)     => passwordManager.verify(pwd));
+ipcMain.handle('password:disable',   (_, pwd)     => passwordManager.disable(pwd));

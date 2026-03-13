@@ -36,32 +36,103 @@ let sandwichOpen  = false;
 /* ══════════════════════════════════════════════════════════════
    INIT
 ══════════════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', async () => {
-  settings      = await window.discowlAPI.settings.get();
-  currentEngine = settings.defaultEngine || 'duckduckgo';
 
-  // Appliquer le thème AVANT tout affichage pour éviter le flash
-  applyTheme(settings.theme || 'dark');
+/* ══════════════════════════════════════════════════════════════
+   LOCK SCREEN
+══════════════════════════════════════════════════════════════ */
+async function initLockScreen() {
+  const enabled = await window.discowlAPI.password.isEnabled().catch(() => false);
+  if (!enabled) return;
 
-  updateEngineUI();
-  setupToolbar();
-  setupSandwichMenu();
-  setupKeyboardShortcuts();
-  setupNewTabPage();
-  applySettings(settings);
-  updateTorIndicator();
-  window.DownloadManager?.init();
-  initMenubar();
+  const screen    = document.getElementById('lock-screen');
+  const input     = document.getElementById('lock-pw-input');
+  const errorDiv  = document.getElementById('lock-error');
+  const unlockBtn = document.getElementById('lock-unlock-btn');
+  const closeBtn  = document.getElementById('lock-close-btn');
+  const eyeBtn    = document.getElementById('lock-eye-btn');
 
-  // Nouvelles fenêtres demandées par des sites → ouvrir en onglet
-  window.addEventListener('discowl:open-tab', (e) => {
-    createTab(e.detail.url, false);
+  if (!screen) return;
+
+  screen.style.display         = 'flex';
+  screen.style.alignItems      = 'center';
+  screen.style.justifyContent  = 'center';
+
+  setTimeout(() => input?.focus(), 120);
+
+  eyeBtn?.addEventListener('click', () => {
+    if (input) input.type = input.type === 'password' ? 'text' : 'password';
   });
 
-  // Ouvrir sur la page d'accueil Discowl (newtab), pas une URL externe
-  createTab('about:newtab', false);
-  // Appliquer le mode NTP initial
-  updateNewtabMode(false);
+  input?.addEventListener('focus', () => { if (input) input.style.borderColor = 'var(--accent)'; });
+  input?.addEventListener('blur',  () => { if (input) input.style.borderColor = 'var(--border)'; });
+
+  async function tryUnlock() {
+    const pwd = input?.value || '';
+    if (!pwd) { if (errorDiv) errorDiv.textContent = 'Please enter your password'; return; }
+
+    if (unlockBtn) { unlockBtn.textContent = 'Verifying…'; unlockBtn.disabled = true; unlockBtn.style.opacity = '.6'; }
+    if (errorDiv)  errorDiv.textContent = '';
+
+    try {
+      const ok = await window.discowlAPI.password.verify(pwd);
+      if (ok) {
+        screen.style.transition = 'opacity .25s';
+        screen.style.opacity    = '0';
+        setTimeout(() => { screen.style.display = 'none'; }, 260);
+      } else {
+        if (errorDiv) errorDiv.textContent = '✗ Incorrect password';
+        if (input) { input.value = ''; input.focus(); }
+        const panel = document.getElementById('lock-panel');
+        if (panel) { panel.style.animation = 'none'; panel.offsetHeight; panel.style.animation = 'lockShake .35s ease'; }
+      }
+    } catch(e) {
+      if (errorDiv) errorDiv.textContent = 'Error — try again';
+    } finally {
+      if (unlockBtn) { unlockBtn.textContent = 'Unlock'; unlockBtn.disabled = false; unlockBtn.style.opacity = ''; }
+    }
+  }
+
+  unlockBtn?.addEventListener('click', tryUnlock);
+  input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+  closeBtn?.addEventListener('click', () => window.close());
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // createTab DOIT être appelé quoi qu'il arrive — on l'enveloppe dans un try/finally
+  try {
+    settings      = await window.discowlAPI.settings.get();
+    currentEngine = settings.defaultEngine || 'duckduckgo';
+
+    // Appliquer le thème AVANT tout affichage pour éviter le flash
+    applyTheme(settings.theme || 'dark');
+
+    updateEngineUI();
+    setupToolbar();
+    setupSandwichMenu();
+    setupKeyboardShortcuts();
+    setupNewTabPage();
+    applySettings(settings);
+    updateTorIndicator();
+    window.DownloadManager?.init();
+    initMenubar();
+
+    // Nouvelles fenêtres demandées par des sites → ouvrir en onglet
+    window.addEventListener('discowl:open-tab', (e) => {
+      const activePrivate = getActiveTab()?.isPrivate ?? false;
+      createTab(e.detail.url, activePrivate);
+    });
+  } catch(e) {
+    console.error('[Init] Erreur pendant le démarrage :', e);
+  } finally {
+    // Toujours ouvrir l'onglet initial — même si une étape précédente a planté
+    if (tabs.length === 0) {
+      createTab('about:newtab', false);
+      updateNewtabMode(false);
+    }
+  }
+
+  // Lock screen — après l'onglet, en parallèle, jamais bloquant
+  initLockScreen().catch(() => {});
 });
 
 /* ══════════════════════════════════════════════════════════════
@@ -225,17 +296,12 @@ function createTab(url = 'about:newtab', isPrivate = false) {
     }
   });
 
+  // Toute tentative d'ouvrir une nouvelle fenêtre → nouvel onglet
+  // Géré principalement par setWindowOpenHandler dans main.js (web-contents-created)
+  // Le fallback ici couvre les cas où l'événement webview 'new-window' est émis
   webview.addEventListener('new-window', (e) => {
     e.preventDefault();
-    createTab(e.url, isPrivate);
-  });
-
-  // Certains sites forcent la navigation vers une URL externe via will-navigate
-  // avec disposition != 'current-tab' — on l'intercepte aussi
-  webview.addEventListener('will-navigate', (e) => {
-    // Si l'URL change et que la target est explicitement une nouvelle fenêtre
-    // (détecté par le fait que l'URL est complètement différente du domaine courant)
-    // → laisser faire (navigation normale dans l'onglet)
+    if (e.url && e.url !== 'about:blank') createTab(e.url, isPrivate);
   });
 
   webview.addEventListener('close', () => {

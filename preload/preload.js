@@ -74,6 +74,19 @@ contextBridge.exposeInMainWorld('discowlAPI', {
   /* ── Webview preload path ─────────────────────────────────── */
   webviewPreload: require('path').join(__dirname, 'preload-webview.js'),
 
+
+  /* ── Window controls (custom titlebar) ──────────────────────── */
+  window: {
+    minimize:          ()  => ipcRenderer.send('window:minimize'),
+    maximize:          ()  => ipcRenderer.send('window:maximize'),
+    close:             ()  => ipcRenderer.send('window:close'),
+    isMaximized:       ()  => ipcRenderer.invoke('window:isMaximized'),
+    customTitlebar:    ()  => ipcRenderer.invoke('window:customTitlebar'),
+    getBounds:         ()  => ipcRenderer.invoke('window:getBounds'),
+    getWorkArea:       ()  => ipcRenderer.invoke('window:getWorkArea'),
+    setBounds:         (b) => ipcRenderer.send('window:setBounds', b),
+    onMaximized:       (cb)=> ipcRenderer.on('window:maximized', (_, v) => cb(v)),
+  },
   /* ── Password / Lock ─────────────────────────────────────── */
   password: {
     isEnabled: ()      => ipcRenderer.invoke('password:isEnabled'),

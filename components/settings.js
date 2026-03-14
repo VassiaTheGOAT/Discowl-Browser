@@ -261,7 +261,7 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.1.9';
+      if (vEl) vEl.textContent = v || '1.2.1';
     }).catch(() => {});
 
     sec.appendChild(makeGroup('Application', [
@@ -324,6 +324,37 @@ const SettingsManager = (() => {
         )
       )
     ]));
+
+    const titlebarGroup = document.createElement('div');
+    titlebarGroup.className = 'settings-group';
+
+    const titlebarLabel = document.createElement('span');
+    titlebarLabel.style.cssText = 'display:flex;align-items:center;gap:8px';
+    titlebarLabel.innerHTML = 'Custom titlebar <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(230,108,44,.18);color:var(--accent);letter-spacing:.04em">BETA</span>';
+
+    titlebarGroup.appendChild(makeRow(
+      titlebarLabel,
+      'Hides the native window frame and integrates the −/□/× buttons directly into the menubar.',
+      makeToggle('toggle-custom-titlebar', !!_settings.customTitlebar, async v => {
+        await save({ customTitlebar: v });
+        titlebarRestartBtn.style.display = 'block';
+      })
+    ));
+
+    const titlebarRestartBtn = makeButton('↺ Restart to apply', 'settings-btn-primary', () => {
+      window.discowlAPI.app.relaunch();
+    });
+    titlebarRestartBtn.style.cssText += ';margin:14px 20px 16px;display:none';
+
+    titlebarGroup.appendChild(titlebarRestartBtn);
+
+    const windowGroup = document.createElement('div');
+    windowGroup.className = 'settings-group-wrapper';
+    const windowHeader = document.createElement('div');
+    windowHeader.className = 'settings-group-title';
+    windowHeader.textContent = 'Window';
+    sec.appendChild(windowHeader);
+    sec.appendChild(titlebarGroup);
   }
 
   /* ── Search ────────────────────────────────────────────────── */

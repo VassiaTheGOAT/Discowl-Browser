@@ -1,6 +1,6 @@
 {
   "name": "discowl-browser",
-  "version": "1.1.9",
+  "version": "1.2.1",
   "description": "Discowl Browser - A new gen browser",
   "main": "main/main.js",
   "author": "Discowl",
@@ -48,14 +48,16 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/logo-discowl.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": "ifNotPresent",
-      "createStartMenuShortcut": "ifNotPresent",
-      "shortcutName": "Discowl Browser"
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Discowl Browser",
+      "include": "build/installer.nsh",
+      "deleteAppDataOnUninstall": false
     },
     "mac": {
       "target": "dmg",

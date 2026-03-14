@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.DownloadManager?.init();
     initMenubar();
     initVaultBanners();
+    initCustomTitlebar();
 
     // Nouvelles fenêtres demandées par des sites → ouvrir en onglet
     window.addEventListener('discowl:open-tab', (e) => {
@@ -146,17 +147,52 @@ window.DiscowlBrowser = {
   setEngine:         (key)   => setEngine(key),
   setTheme:          (theme) => applyTheme(theme),
   onSettingsChanged: (s)     => { settings = s; applySettings(s); },
+  applyToolbarConfig: (cfg)  => applyToolbarConfig(cfg),
   getTabById:        (id)    => getTab(id),
   switchToTab:       (id)    => switchTab(id),
   closeTab:          (id)    => closeTab(id),
   openDownloadsTab:  ()      => _openDownloadsTab(),
-  openPasswordsTab:  ()      => _openPasswordsTab(),
-  closePasswordsTab: ()      => _closePasswordsTab()
+  openPasswordsTab:    ()    => _openPasswordsTab(),
+  closePasswordsTab:   ()    => _closePasswordsTab(),
+  openCustomizeTab:    ()    => _openCustomizeTab(),
+  closeCustomizeTab:   ()    => _closeCustomizeTab()
 };
 
 /* ══════════════════════════════════════════════════════════════
    DOWNLOADS TAB
 ══════════════════════════════════════════════════════════════ */
+
+function _openCustomizeTab() {
+  const existing = tabs.find(t => t.isCustomizeTab);
+  if (existing) { switchTab(existing.id); return; }
+
+  const id = ++tabCounter;
+  const webview = document.createElement('webview');
+  webview.setAttribute('partition', 'persist:main');
+  webview.setAttribute('allowpopups', '');
+  webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no');
+  webview.dataset.tabId = id;
+  document.getElementById('webview-container').appendChild(webview);
+
+  const tab = {
+    id, title: 'Customize toolbar', url: 'about:customize-toolbar',
+    favicon: '', isPrivate: false, isLoading: false,
+    partition: 'persist:main', webview,
+    canGoBack: false, canGoForward: false, zoom: 1,
+    isCustomizeTab: true,
+    _prevWasNewtab: false, _nextAfterNewtab: ''
+  };
+
+  tabs.push(tab);
+  renderTabItem(tab);
+  switchTab(id);
+}
+
+function _closeCustomizeTab() {
+  const tab = tabs.find(t => t.isCustomizeTab);
+  if (tab) closeTab(tab.id);
+}
+
 function _openPasswordsTab() {
   // Si un onglet passwords existe déjà, le réactiver
   const existing = tabs.find(t => t.isPasswordsTab);
@@ -322,7 +358,10 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   webview.addEventListener('page-title-updated', (e) => {
     tab.title = e.title || tab.url;
     refreshTab(id);
-    if (activeTabId === id) document.title = `${e.title} — Discowl`;
+    if (activeTabId === id) {
+      document.title = `${e.title} — Discowl`;
+      updateFakeTitlebarTitle(e.title);
+    }
   });
 
   webview.addEventListener('page-favicon-updated', (e) => {
@@ -570,9 +609,17 @@ function switchTab(id) {
   const dlPage = document.getElementById('downloads-page');
 
   const pwPage = document.getElementById('passwords-page');
-  if (tab.isPasswordsTab) {
+  const ctPage = document.getElementById('customize-toolbar-page');
+  if (tab.isCustomizeTab) {
     ntpEl?.classList.add('hidden');
     dlPage?.classList.add('hidden');
+    pwPage?.classList.add('hidden');
+    webviewContainer?.querySelectorAll('webview').forEach(wv => wv.classList.remove('active'));
+    window.ToolbarCustomizer?.show();
+  } else if (tab.isPasswordsTab) {
+    ntpEl?.classList.add('hidden');
+    dlPage?.classList.add('hidden');
+    ctPage?.classList.add('hidden');
     webviewContainer?.querySelectorAll('webview').forEach(wv => wv.classList.remove('active'));
     window.PasswordsManager?.show();
   } else if (tab.isDownloadsTab) {
@@ -584,6 +631,7 @@ function switchTab(id) {
   } else {
     dlPage?.classList.add('hidden');
     pwPage?.classList.add('hidden');
+    ctPage?.classList.add('hidden');
     if (ntpEl) ntpEl.classList.toggle('hidden', !!tab.url);
     if (!tab.url) {
       // Mettre à jour le titre selon le mode actuel (Tor peut avoir changé)
@@ -1092,6 +1140,277 @@ function positionNewtabLogo() {
   brand.style.setProperty('--logo-left', logoLeft + 'px');
 }
 
+
+/* ══════════════════════════════════════════════════════════════
+   CUSTOM TITLEBAR
+   Mode natif  : frame Windows normal, rien à faire
+   Mode custom : frameless, boutons −/□/× dans la menubar
+══════════════════════════════════════════════════════════════ */
+async function initCustomTitlebar() {
+  const isCustom = await window.discowlAPI.window.customTitlebar().catch(() => false);
+  if (!isCustom) return; // Mode natif — frame Windows, rien à faire
+
+  // Frameless : activer les contrôles dans la menubar
+  document.getElementById('window-controls')?.classList.remove('hidden');
+  document.body.classList.add('custom-titlebar');
+
+  // Attendre que les éléments soient visibles avant de mettre à jour l'icône
+  const isMax = await window.discowlAPI.window.isMaximized().catch(() => false);
+  setTimeout(() => _updateMaxIcon(isMax), 50);
+  window.discowlAPI.window.onMaximized((v) => _updateMaxIcon(v));
+
+  document.getElementById('wc-minimize')?.addEventListener('click', () => window.discowlAPI.window.minimize());
+  document.getElementById('wc-maximize')?.addEventListener('click', () => window.discowlAPI.window.maximize());
+  document.getElementById('wc-close')?.addEventListener('click',    () => window.discowlAPI.window.close());
+  document.getElementById('menubar-drag')?.addEventListener('dblclick', () => window.discowlAPI.window.maximize());
+
+  initSnapLayouts();
+  initResizeHandles();
+}
+
+function _updateMaxIcon(isMax) {
+  document.body.classList.toggle('window-maximized', isMax);
+  const icon = document.getElementById('wc-max-icon');
+  if (!icon) return;
+  icon.innerHTML = isMax
+    ? `<rect x="4" y="2" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.4" fill="none"/>` +
+      `<rect x="2" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.4" fill="none" style="fill:var(--bg-base)"/>`
+    : `<rect x="2" y="2" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.4" fill="none"/>`;
+  const btn = document.getElementById('wc-maximize');
+  if (btn) btn.title = isMax ? 'Restore' : 'Maximize';
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SNAP LAYOUTS — popup Windows 11 style au hover du bouton maximize
+══════════════════════════════════════════════════════════════ */
+function initSnapLayouts() {
+  const btn = document.getElementById('wc-maximize');
+  if (!btn) return;
+
+  let _popup = null;
+  let _hideTimer = null;
+
+  // 6 groupes exactement comme Windows 11 Snap Layouts
+  // Chaque groupe = une miniature avec zones colorables individuellement
+  const LAYOUTS = [
+    // Groupe 1 : plein écran
+    { id: 'full', label: 'Full screen',
+      zones: [{x:0,y:0,w:1,h:1}],
+      active: [0],
+      calc: (w) => [{ x:w.x, y:w.y, width:w.width, height:w.height }] },
+
+    // Groupe 2 : 1/2 | 1/2
+    { id: 'half-half', label: 'Side by side',
+      zones: [{x:0,y:0,w:.5,h:1},{x:.5,y:0,w:.5,h:1}],
+      active: [0],
+      calc: (w) => [
+        { x:w.x, y:w.y, width:Math.floor(w.width/2), height:w.height },
+        { x:w.x+Math.floor(w.width/2), y:w.y, width:Math.ceil(w.width/2), height:w.height }
+      ] },
+
+    // Groupe 3 : 1/3 | 1/3 | 1/3
+    { id: 'thirds', label: 'Three columns',
+      zones: [{x:0,y:0,w:.33,h:1},{x:.33,y:0,w:.34,h:1},{x:.67,y:0,w:.33,h:1}],
+      active: [0],
+      calc: (w) => [
+        { x:w.x, y:w.y, width:Math.floor(w.width/3), height:w.height },
+        { x:w.x+Math.floor(w.width/3), y:w.y, width:Math.floor(w.width/3), height:w.height },
+        { x:w.x+Math.floor(w.width*2/3), y:w.y, width:Math.ceil(w.width/3), height:w.height }
+      ] },
+
+    // Groupe 4 : 2/3 | 1/3
+    { id: 'two-third', label: 'Two thirds left',
+      zones: [{x:0,y:0,w:.67,h:1},{x:.67,y:0,w:.33,h:1}],
+      active: [0],
+      calc: (w) => [
+        { x:w.x, y:w.y, width:Math.floor(w.width*2/3), height:w.height },
+        { x:w.x+Math.floor(w.width*2/3), y:w.y, width:Math.ceil(w.width/3), height:w.height }
+      ] },
+
+    // Groupe 5 : 1/2 | 1/4 / 1/4
+    { id: 'half-quarter', label: 'Half and quarters',
+      zones: [{x:0,y:0,w:.5,h:1},{x:.5,y:0,w:.5,h:.5},{x:.5,y:.5,w:.5,h:.5}],
+      active: [0],
+      calc: (w) => [
+        { x:w.x, y:w.y, width:Math.floor(w.width/2), height:w.height },
+        { x:w.x+Math.floor(w.width/2), y:w.y, width:Math.ceil(w.width/2), height:Math.floor(w.height/2) },
+        { x:w.x+Math.floor(w.width/2), y:w.y+Math.floor(w.height/2), width:Math.ceil(w.width/2), height:Math.ceil(w.height/2) }
+      ] },
+
+    // Groupe 6 : 1/4 | 1/4 | 1/4 | 1/4
+    { id: 'quarters', label: 'Four quadrants',
+      zones: [{x:0,y:0,w:.5,h:.5},{x:.5,y:0,w:.5,h:.5},{x:0,y:.5,w:.5,h:.5},{x:.5,y:.5,w:.5,h:.5}],
+      active: [0],
+      calc: (w) => [
+        { x:w.x, y:w.y, width:Math.floor(w.width/2), height:Math.floor(w.height/2) },
+        { x:w.x+Math.floor(w.width/2), y:w.y, width:Math.ceil(w.width/2), height:Math.floor(w.height/2) },
+        { x:w.x, y:w.y+Math.floor(w.height/2), width:Math.floor(w.width/2), height:Math.ceil(w.height/2) },
+        { x:w.x+Math.floor(w.width/2), y:w.y+Math.floor(w.height/2), width:Math.ceil(w.width/2), height:Math.ceil(w.height/2) }
+      ] },
+  ];
+
+  function createPopup() {
+    const popup = document.createElement('div');
+    popup.id = 'snap-popup';
+    popup.className = 'snap-popup';
+
+    const title = document.createElement('div');
+    title.className = 'snap-title';
+    title.textContent = 'Snap layouts';
+    popup.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'snap-grid';
+
+    LAYOUTS.forEach((layout, li) => {
+      const item = document.createElement('div');
+      item.className = 'snap-item';
+      item.title = layout.label;
+
+      // Miniature SVG style Windows 11 : zones proportionnelles
+      const W = 96, H = 60, GAP = 2, R = 3;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', W); svg.setAttribute('height', H);
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+      layout.zones.forEach((z, zi) => {
+        const rx = Math.round(z.x * W) + (zi > 0 ? GAP : 0);
+        const ry = Math.round(z.y * H) + (zi > 0 && z.y > 0 ? GAP : 0);
+        const rw = Math.round(z.w * W) - GAP;
+        const rh = Math.round(z.h * H) - GAP;
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', rx); rect.setAttribute('y', ry);
+        rect.setAttribute('width', rw); rect.setAttribute('height', rh);
+        rect.setAttribute('rx', R);
+        rect.dataset.zoneIndex = zi;
+        svg.appendChild(rect);
+      });
+
+      item.appendChild(svg);
+
+      // pointer-events sur les rects SVG uniquement
+      svg.style.pointerEvents = 'none';
+      svg.querySelectorAll('rect').forEach(r => { r.style.pointerEvents = 'all'; });
+
+      // Hover zone par zone via mouseover/mouseout sur le SVG
+      svg.addEventListener('mouseover', (e) => {
+        const target = e.target.closest('rect');
+        if (!target) return;
+        const zi = parseInt(target.dataset.zoneIndex ?? '0');
+        svg.querySelectorAll('rect').forEach((r, i) => {
+          r.classList.toggle('snap-zone-active', i === zi);
+        });
+      });
+      svg.addEventListener('mouseout', (e) => {
+        // ne pas effacer si on glisse vers un autre rect du même svg
+        if (svg.contains(e.relatedTarget)) return;
+        svg.querySelectorAll('rect').forEach(r => r.classList.remove('snap-zone-active'));
+      });
+
+      // Clic sur une zone
+      svg.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const target = e.target.closest('rect');
+        const zi = target ? parseInt(target.dataset.zoneIndex ?? '0') : 0;
+        hidePopup();
+        const wa = await window.discowlAPI.window.getWorkArea();
+        if (!wa) return;
+        const isMax = await window.discowlAPI.window.isMaximized();
+        if (isMax) {
+          window.discowlAPI.window.maximize();
+          await new Promise(resolve => setTimeout(resolve, 80));
+        }
+        const bounds = layout.calc(wa);
+        window.discowlAPI.window.setBounds(bounds[zi] || bounds[0]);
+      });
+
+      // Highlight zone 0 au survol de l'item
+      item.addEventListener('mouseenter', () => {
+        svg.querySelectorAll('rect').forEach((r, i) => r.classList.toggle('snap-zone-active', i === 0));
+      });
+      item.addEventListener('mouseleave', (e) => {
+        // Laisser le SVG gérer le hover zone si la souris est encore dedans
+        if (!item.contains(e.relatedTarget)) {
+          svg.querySelectorAll('rect').forEach(r => r.classList.remove('snap-zone-active'));
+        }
+      });
+
+      grid.appendChild(item);
+    });
+
+    popup.appendChild(grid);
+    return popup;
+  }
+
+  function showPopup() {
+    if (_popup) return;
+    clearTimeout(_hideTimer);
+
+    _popup = createPopup();
+    document.body.appendChild(_popup);
+
+    // Positionner en dessous du bouton, collé à droite du bouton
+    const rect = btn.getBoundingClientRect();
+    const popupW = 246; // largeur estimée du popup
+    let leftPos = rect.right - popupW;
+    if (leftPos < 4) leftPos = 4;
+    _popup.style.left   = leftPos + 'px';
+    _popup.style.right  = 'auto';
+    _popup.style.top    = (rect.bottom + 2) + 'px';
+
+    // Garder ouvert si la souris entre dans le popup
+    _popup.addEventListener('mouseenter', () => clearTimeout(_hideTimer));
+    _popup.addEventListener('mouseleave', () => scheduleHide());
+  }
+
+  function scheduleHide(delay = 300) {
+    clearTimeout(_hideTimer);
+    _hideTimer = setTimeout(hidePopup, delay);
+  }
+
+  function hidePopup() {
+    _popup?.remove();
+    _popup = null;
+    clearTimeout(_hideTimer);
+  }
+
+  btn.addEventListener('mouseenter', showPopup);
+  btn.addEventListener('mouseleave', () => scheduleHide());
+}
+
+function initResizeHandles() {
+  let resizing = false, edge, startX, startY, startBounds;
+  const MIN_W = 900, MIN_H = 600;
+
+  document.querySelectorAll('.rz').forEach(h => {
+    h.addEventListener('mousedown', async (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      resizing = true; edge = h.dataset.edge;
+      startX = e.screenX; startY = e.screenY;
+      startBounds = await window.discowlAPI.window.getBounds();
+      document.body.style.userSelect = 'none';
+    });
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!resizing || !startBounds) return;
+    const dx = e.screenX - startX, dy = e.screenY - startY;
+    let {x, y, width, height} = startBounds;
+    if (edge.includes('e')) width  = Math.max(MIN_W, width + dx);
+    if (edge.includes('s')) height = Math.max(MIN_H, height + dy);
+    if (edge.includes('w')) { width = Math.max(MIN_W, width - dx); x = startBounds.x + startBounds.width - width; }
+    if (edge.includes('n')) { height = Math.max(MIN_H, height - dy); y = startBounds.y + startBounds.height - height; }
+    window.discowlAPI.window.setBounds({x:Math.round(x), y:Math.round(y), width:Math.round(width), height:Math.round(height)});
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (resizing) { resizing = false; document.body.style.userSelect = ''; }
+  });
+}
+
 function initMenubar() {
   let openItem = null;
 
@@ -1177,6 +1496,7 @@ function initMenubar() {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
   });
+  mb('customize-toolbar',  () => _openCustomizeTab());
   mb('toggle-bookmarks-bar', () => {
     const bar = document.getElementById('bookmarks-toolbar');
     if (bar) bar.classList.toggle('hidden');
@@ -1432,7 +1752,64 @@ function clearNewtabSearch() {
 /* ══════════════════════════════════════════════════════════════
    SETTINGS APPLICATION
 ══════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════
+   TOOLBAR CONFIG — application en temps réel
+══════════════════════════════════════════════════════════════ */
+const TOOLBAR_BUTTON_MAP = {
+  back:      () => document.getElementById('back-btn')?.closest('.nav-buttons'),
+  forward:   () => document.getElementById('forward-btn'),
+  reload:    () => document.getElementById('reload-btn'),
+  home:      () => document.getElementById('home-btn'),
+  bookmarks: () => document.getElementById('sidebar-left-toggle'),
+  history:   () => document.getElementById('sidebar-right-toggle'),
+  downloads: () => document.getElementById('downloads-btn')?.parentElement,
+};
+
+// Séparer back des autres nav-buttons
+const NAV_BUTTONS_INDIVIDUAL = {
+  back:    () => document.getElementById('back-btn'),
+  forward: () => document.getElementById('forward-btn'),
+  reload:  () => document.getElementById('reload-btn'),
+  home:    () => document.getElementById('home-btn'),
+};
+
+function applyToolbarConfig(cfg) {
+  if (!cfg?.length) return;
+
+  // Visibilité
+  cfg.forEach(item => {
+    const getter = NAV_BUTTONS_INDIVIDUAL[item.id];
+    const el = getter ? getter() : TOOLBAR_BUTTON_MAP[item.id]?.();
+    if (!el) return;
+    el.style.display = item.visible ? '' : 'none';
+  });
+
+  // Ordre des boutons de navigation (back/forward/reload/home)
+  const navContainer = document.querySelector('.nav-buttons');
+  if (navContainer) {
+    const navOrder = cfg
+      .filter(i => i.visible && NAV_BUTTONS_INDIVIDUAL[i.id])
+      .map(i => NAV_BUTTONS_INDIVIDUAL[i.id]?.())
+      .filter(Boolean);
+    navOrder.forEach(el => navContainer.appendChild(el));
+  }
+
+  // Ordre des boutons d'action droite (bookmarks/history/downloads)
+  const actContainer = document.querySelector('.toolbar-actions');
+  if (actContainer) {
+    const sandwichBtn = document.getElementById('sandwich-btn');
+    const actOrder = cfg
+      .filter(i => i.visible && TOOLBAR_BUTTON_MAP[i.id] && !NAV_BUTTONS_INDIVIDUAL[i.id])
+      .map(i => TOOLBAR_BUTTON_MAP[i.id]?.())
+      .filter(Boolean);
+    // Réinsérer avant le sandwich
+    actOrder.forEach(el => { if (sandwichBtn) actContainer.insertBefore(el, sandwichBtn); });
+  }
+}
+
 function applySettings(s) {
+  if (s.toolbarItems) applyToolbarConfig(s.toolbarItems);
   // Thème — appliqué sur <html> pour le chrome complet du navigateur
   if (s.theme) applyTheme(s.theme);
 

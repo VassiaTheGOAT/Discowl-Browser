@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, session, shell, dialog, nativeTheme, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, dialog, nativeTheme, Menu, screen } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
@@ -44,6 +44,7 @@ function readSettingsSync() {
    session.setProxy() ne couvre que certaines sessions.
 ══════════════════════════════════════════════════════════════ */
 const earlySettings = readSettingsSync();
+const USE_CUSTOM_TITLEBAR = !!earlySettings.customTitlebar;
 
 // ── Cache / Storage cleanup ────────────────────────────────────
 // Les erreurs "Unable to move the cache" et "Failed to delete the database"
@@ -169,7 +170,9 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900,
     minWidth: 900, minHeight: 600,
-    frame: true,
+    frame: !USE_CUSTOM_TITLEBAR,
+    transparent: false,
+    hasShadow: true,
     show: false,
     backgroundColor: '#0f1117',
     webPreferences: {
@@ -183,6 +186,8 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => { mainWindow.show(); mainWindow.maximize(); });
+  mainWindow.on('maximize',   () => mainWindow.webContents.send('window:maximized', true));
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized', false));
 
   // Forcer toutes les nouvelles fenêtres (window.open, target=_blank, etc.)
   // à s'ouvrir dans un nouvel onglet Discowl au lieu d'une vraie fenêtre
@@ -363,6 +368,22 @@ ipcMain.handle('password:isEnabled', ()           => passwordManager.isEnabled()
 ipcMain.handle('password:setup',     (_, pwd)     => passwordManager.setup(pwd));
 ipcMain.handle('password:verify',    (_, pwd)     => passwordManager.verify(pwd));
 ipcMain.handle('password:disable',   (_, pwd)     => passwordManager.disable(pwd));
+
+/* ══════════════════════════════════════════════════════════════
+   WINDOW CONTROLS IPC (custom titlebar)
+══════════════════════════════════════════════════════════════ */
+ipcMain.handle('window:getBounds',   () => mainWindow?.getBounds());
+ipcMain.handle('window:getWorkArea', () => screen.getPrimaryDisplay().workArea);
+ipcMain.on('window:setBounds',  (_, b) => mainWindow?.setBounds(b));
+ipcMain.on('window:minimize',  () => mainWindow?.minimize());
+ipcMain.on('window:maximize',  () => {
+  if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+  else mainWindow?.maximize();
+});
+ipcMain.on('window:close',     () => mainWindow?.close());
+ipcMain.handle('window:isMaximized',    () => mainWindow?.isMaximized() ?? false);
+ipcMain.handle('window:customTitlebar', () => USE_CUSTOM_TITLEBAR);
+
 /* ══════════════════════════════════════════════════════════════
    VAULT IPC
 ══════════════════════════════════════════════════════════════ */

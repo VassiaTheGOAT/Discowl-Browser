@@ -993,7 +993,8 @@ html[data-theme="light"] #sandwich-menu { box-shadow: 0 8px 32px rgba(0,0,0,0.14
   position: fixed;
   inset: 0;
   background: var(--bg-panel);
-  z-index: 10000;
+  z-index: 100000;
+  -webkit-app-region: no-drag;
   display: flex;
   flex-direction: column;
   animation: panelIn 0.2s cubic-bezier(0.4,0,0.2,1);
@@ -2275,3 +2276,352 @@ html[data-theme="light"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
 }
 .passwords-icon-btn:hover { background: var(--border); color: var(--text-primary); }
 .passwords-delete-btn:hover { color: var(--red); }
+
+/* ══════════════════════════════════════════════════════════════
+   CUSTOMIZE TOOLBAR PAGE
+══════════════════════════════════════════════════════════════ */
+.ct-page {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-base);
+  z-index: 100;
+  overflow-y: auto;
+}
+.ct-page.hidden { display: none !important; }
+
+.ct-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
+
+/* Header */
+.ct-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+.ct-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+}
+.ct-header-left h2 { font-size: 20px; font-weight: 700; margin: 0; }
+.ct-header-right { display: flex; align-items: center; gap: 8px; }
+.ct-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: background .12s;
+}
+.ct-close-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ct-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 24px 0;
+}
+
+/* Preview bar */
+.ct-preview {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 28px;
+}
+.ct-preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 10px;
+}
+.ct-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-base);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-height: 38px;
+}
+.ct-preview-fixed { display: flex; align-items: center; flex: 1; }
+.ct-preview-urlbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Columns */
+.ct-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.ct-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ct-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+.ct-column-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ct-column-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Drop zone */
+.ct-zone {
+  min-height: 200px;
+  background: var(--bg-hover);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color .15s, background .15s;
+}
+.ct-zone:empty::after, .ct-zone:has(.ct-drop-hint)::after { display: none; }
+.ct-zone[data-zone="active"] { border-color: rgba(var(--accent-rgb, 230,108,44), .4); }
+
+/* Cards */
+.ct-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: grab;
+  transition: background .1s, border-color .1s, transform .1s;
+  user-select: none;
+}
+.ct-card:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.ct-card:active { cursor: grabbing; }
+.ct-card-active  { border-left: 3px solid var(--accent); }
+.ct-card-inactive { opacity: .75; }
+
+.ct-card-grip {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  cursor: grab;
+}
+.ct-card-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+  border-radius: 6px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+.ct-card-info { flex: 1; min-width: 0; }
+.ct-card-label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.ct-card-desc  { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+.ct-card-toggle {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .1s, color .1s;
+}
+.ct-card-active  .ct-card-toggle:hover { background: rgba(239,68,68,.15); color: #ef4444; }
+.ct-card-inactive .ct-card-toggle:hover { background: rgba(var(--accent-rgb,230,108,44),.15); color: var(--accent); }
+
+.ct-drop-hint {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 24px 0;
+}
+
+/* Drop indicator */
+.ct-drop-indicator {
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin: 2px 0;
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CUSTOM TITLEBAR — Window controls & drag region
+══════════════════════════════════════════════════════════════ */
+
+/* Body class set when custom titlebar is active */
+body.custom-titlebar #menubar {
+  -webkit-app-region: drag;   /* toute la menubar est draggable */
+}
+
+.menubar-drag {
+  flex: 1;
+  height: 100%;
+  -webkit-app-region: no-drag; /* inactif par défaut */
+}
+
+body.custom-titlebar .menubar-drag {
+  -webkit-app-region: drag;   /* actif seulement en mode custom */
+}
+
+/* Les boutons de la menubar restent cliquables même dans la drag zone */
+body.custom-titlebar .mb-item,
+body.custom-titlebar #window-controls {
+  -webkit-app-region: no-drag;
+}
+
+/* Window controls */
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 100%;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+.window-controls.hidden { display: none !important; }
+
+.wc-btn {
+  width: 46px;
+  height: 100%;
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  -webkit-app-region: no-drag;
+}
+.wc-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.wc-close:hover {
+  background: #c42b1c;
+  color: #fff !important;
+}
+
+/* Maximize/restore icon: handled entirely by JS (_updateMaxIcon) */
+
+/* ══════════════════════════════════════════════════════════════
+   FRAMELESS WINDOW — Resize handles
+══════════════════════════════════════════════════════════════ */
+.rz {
+  position: fixed;
+  z-index: 99998;
+  -webkit-app-region: no-drag;
+  pointer-events: none; /* inactif par défaut — activé uniquement en custom titlebar */
+}
+
+body.custom-titlebar .rz {
+  pointer-events: all;
+}
+.rz-n  { top:0; left:6px; right:6px; height:5px; cursor:n-resize; }
+.rz-s  { bottom:0; left:6px; right:6px; height:5px; cursor:s-resize; }
+.rz-e  { right:0; top:6px; bottom:6px; width:5px; cursor:e-resize; }
+.rz-w  { left:0; top:6px; bottom:6px; width:5px; cursor:w-resize; }
+.rz-ne { top:0; right:0; width:10px; height:10px; cursor:ne-resize; }
+.rz-nw { top:0; left:0;  width:10px; height:10px; cursor:nw-resize; }
+.rz-se { bottom:0; right:0; width:10px; height:10px; cursor:se-resize; }
+.rz-sw { bottom:0; left:0;  width:10px; height:10px; cursor:sw-resize; }
+
+/* Maximized: disable resize handles */
+body.window-maximized .rz { display: none; }
+
+
+/* ══════════════════════════════════════════════════════════════
+   SNAP LAYOUTS POPUP
+══════════════════════════════════════════════════════════════ */
+.snap-popup {
+  position: fixed;
+  z-index: 200000;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: menuIn .12s cubic-bezier(.4,0,.2,1);
+  -webkit-app-region: no-drag;
+  user-select: none;
+}
+
+.snap-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 0 2px;
+}
+
+.snap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.snap-item {
+  width: 56px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background .1s, border-color .1s, color .1s;
+  padding: 0;
+}
+
+.snap-item:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

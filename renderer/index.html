@@ -18,6 +18,38 @@
 <div id="app">
 
   <!-- ── 2. Custom Menu Bar ───────────────────────────────────── -->
+  
+  <!-- ── Resize handles (frameless window) ─────────────────── -->
+  <div class="rz rz-n"  data-edge="n"></div>
+  <div class="rz rz-s"  data-edge="s"></div>
+  <div class="rz rz-e"  data-edge="e"></div>
+  <div class="rz rz-w"  data-edge="w"></div>
+  <div class="rz rz-ne" data-edge="ne"></div>
+  <div class="rz rz-nw" data-edge="nw"></div>
+  <div class="rz rz-se" data-edge="se"></div>
+  <div class="rz rz-sw" data-edge="sw"></div>
+
+  <!-- ── Fake title bar (native-look mode) ──────────────────── -->
+  <div id="fake-titlebar" class="fake-titlebar hidden">
+    <div class="fake-titlebar-drag">
+      <img src="../assets/logo-discowl.png" style="width:16px;height:16px;object-fit:contain;opacity:.8" draggable="false"/>
+      <span id="fake-titlebar-title">Discowl Browser</span>
+    </div>
+    <div class="fake-titlebar-controls">
+      <button class="wc-btn" id="ft-minimize" title="Minimize">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="wc-btn" id="ft-maximize" title="Maximize">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" id="ft-max-icon">
+          <rect x="2" y="2" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.4" fill="none"/>
+        </svg>
+      </button>
+      <button class="wc-btn wc-close" id="ft-close" title="Close">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+
   <div id="menubar" role="menubar">
 
     <!-- File -->
@@ -110,6 +142,10 @@
           <span>Fullscreen</span><span class="mb-shortcut">F11</span>
         </div>
         <div class="mb-separator"></div>
+        <div class="mb-entry" data-action="customize-toolbar">
+          <span>Customize toolbar…</span>
+        </div>
+        <div class="mb-separator"></div>
         <div class="mb-entry" data-action="toggle-bookmarks-bar">
           <span class="mb-icon"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 3h9M2 6.5h9M2 10h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>
           <span>Bookmarks Bar</span>
@@ -179,6 +215,22 @@
           <span>Check for Updates</span>
         </div>
       </div>
+    </div>
+
+    <!-- Drag region + window controls (custom titlebar mode) -->
+    <div id="menubar-drag" class="menubar-drag"></div>
+    <div id="window-controls" class="window-controls hidden">
+      <button id="wc-minimize" class="wc-btn" title="Minimize">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <button id="wc-maximize" class="wc-btn" title="Maximize">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" id="wc-max-icon">
+          <rect x="2" y="2" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.4" fill="none"/>
+        </svg>
+      </button>
+      <button id="wc-close" class="wc-btn wc-close" title="Close">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
     </div>
 
   </div><!-- /#menubar -->
@@ -357,6 +409,71 @@
                    autofocus />
             <button type="submit" id="newtab-search-btn">Search</button>
           </form>
+
+        </div>
+      </div>
+
+      <!-- Customize Toolbar page -->
+      <div id="customize-toolbar-page" class="ct-page hidden">
+        <div class="ct-inner">
+
+          <div class="ct-header">
+            <div class="ct-header-left">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                <rect x="1" y="7" width="20" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M5 7V4M11 7V3M17 7V5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+              <h2>Customize toolbar</h2>
+            </div>
+            <div class="ct-header-right">
+              <button id="ct-reset-btn" class="btn btn-secondary">Reset to default</button>
+              <button id="ct-save-btn"  class="btn btn-primary">Save</button>
+              <button id="ct-close-btn" class="ct-close-btn" title="Close">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <p class="ct-subtitle">Drag buttons to reorder them, or use +/− to add/remove from the toolbar. The URL bar and search engine selector are always visible.</p>
+
+          <!-- Preview de la toolbar -->
+          <div class="ct-preview">
+            <div class="ct-preview-label">Preview</div>
+            <div class="ct-preview-bar" id="ct-preview-bar">
+              <div class="ct-preview-fixed">
+                <div class="ct-preview-urlbar">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="2" y="6" width="10" height="7" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                  <span>Search or enter address…</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ct-columns">
+            <!-- Colonne gauche : dans la toolbar -->
+            <div class="ct-column">
+              <div class="ct-column-header">
+                <span class="ct-column-title">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M7 2v10" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>
+                  Active in toolbar
+                </span>
+                <span class="ct-column-hint">Order = left to right</span>
+              </div>
+              <div class="ct-zone" id="ct-active-zone" data-zone="active"></div>
+            </div>
+
+            <!-- Colonne droite : disponibles -->
+            <div class="ct-column">
+              <div class="ct-column-header">
+                <span class="ct-column-title">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round"/></svg>
+                  Available (hidden)
+                </span>
+                <span class="ct-column-hint">Drag here to remove</span>
+              </div>
+              <div class="ct-zone" id="ct-inactive-zone" data-zone="inactive"></div>
+            </div>
+          </div>
 
         </div>
       </div>
@@ -631,6 +748,7 @@
 <!-- Scripts -->
 <script src="../components/bookmarks.js"></script>
     <script src="../components/passwords.js"></script>
+    <script src="../components/toolbar-customize.js"></script>
 <script src="../components/history.js"></script>
 <script src="../components/settings.js"></script>
 <script src="../components/sidebar.js"></script>

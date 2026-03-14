@@ -117,7 +117,17 @@ class Storage {
       showBookmarksToolbar: true,
       blockAds:             false,
       doNotTrack:           true,
-      saveCookies:          true
+      saveCookies:          true,
+      customTitlebar:       false,
+      toolbarItems: [
+        { id: 'back',       visible: true  },
+        { id: 'forward',    visible: true  },
+        { id: 'reload',     visible: true  },
+        { id: 'home',       visible: true  },
+        { id: 'bookmarks',  visible: true  },
+        { id: 'history',    visible: true  },
+        { id: 'downloads',  visible: true  }
+      ]
     };
   }
 

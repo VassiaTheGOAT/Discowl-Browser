@@ -58,6 +58,22 @@ contextBridge.exposeInMainWorld('discowlAPI', {
   storage: {
     getDataPath: () => ipcRenderer.invoke('storage:getDataPath')
   },
+
+  /* ── Vault (password manager) ────────────────────────────── */
+  vault: {
+    unlock:          (pwd) => ipcRenderer.invoke('vault:unlock', pwd),
+    isUnlocked:      ()    => ipcRenderer.invoke('vault:isUnlocked'),
+    save:            (h, u, p) => ipcRenderer.invoke('vault:save', h, u, p),
+    getForHost:      (url) => ipcRenderer.invoke('vault:getForHost', url),
+    getAll:          ()    => ipcRenderer.invoke('vault:getAll'),
+    getById:         (id)  => ipcRenderer.invoke('vault:getById', id),
+    delete:          (id)  => ipcRenderer.invoke('vault:delete', id),
+    removeProtection:()    => ipcRenderer.invoke('vault:removeProtection'),
+  },
+
+  /* ── Webview preload path ─────────────────────────────────── */
+  webviewPreload: require('path').join(__dirname, 'preload-webview.js'),
+
   /* ── Password / Lock ─────────────────────────────────────── */
   password: {
     isEnabled: ()      => ipcRenderer.invoke('password:isEnabled'),

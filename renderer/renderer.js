@@ -115,6 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateTorIndicator();
     window.DownloadManager?.init();
     initMenubar();
+    initVaultBanners();
 
     // Nouvelles fenêtres demandées par des sites → ouvrir en onglet
     window.addEventListener('discowl:open-tab', (e) => {
@@ -148,12 +149,45 @@ window.DiscowlBrowser = {
   getTabById:        (id)    => getTab(id),
   switchToTab:       (id)    => switchTab(id),
   closeTab:          (id)    => closeTab(id),
-  openDownloadsTab:  ()      => _openDownloadsTab()
+  openDownloadsTab:  ()      => _openDownloadsTab(),
+  openPasswordsTab:  ()      => _openPasswordsTab(),
+  closePasswordsTab: ()      => _closePasswordsTab()
 };
 
 /* ══════════════════════════════════════════════════════════════
    DOWNLOADS TAB
 ══════════════════════════════════════════════════════════════ */
+function _openPasswordsTab() {
+  // Si un onglet passwords existe déjà, le réactiver
+  const existing = tabs.find(t => t.isPasswordsTab);
+  if (existing) { switchTab(existing.id); return; }
+
+  const id = ++tabCounter;
+  const webview = document.createElement('webview');
+  webview.setAttribute('partition', 'persist:main');
+  webview.setAttribute('allowpopups', '');
+  webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no');
+  webview.dataset.tabId = id;
+  document.getElementById('webview-container').appendChild(webview);
+
+  const tab = {
+    id, title: 'Passwords', url: 'about:passwords', favicon: '',
+    isPrivate: false, isLoading: false, partition: 'persist:main', webview,
+    canGoBack: false, canGoForward: false, zoom: 1,
+    isPasswordsTab: true,
+    _prevWasNewtab: false, _nextAfterNewtab: ''
+  };
+
+  tabs.push(tab);
+  renderTabItem(tab);
+  switchTab(id);
+}
+
+function _closePasswordsTab() {
+  const tab = tabs.find(t => t.isPasswordsTab);
+  if (tab) closeTab(tab.id);
+}
+
 function _openDownloadsTab() {
   const id = ++tabCounter;
   const partition = 'persist:main';
@@ -204,6 +238,10 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   webview.setAttribute('partition', partition);
   webview.setAttribute('allowpopups', '');
   webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no');
+  // Injecter le content script pour la détection de formulaires
+  if (window.discowlAPI?.webviewPreload) {
+    webview.setAttribute('preload', 'file://' + window.discowlAPI.webviewPreload);
+  }
   webview.dataset.tabId = id;
 
   const targetUrl = resolveUrl(url);
@@ -306,6 +344,22 @@ function createTab(url = 'about:newtab', isPrivate = false) {
 
   webview.addEventListener('close', () => {
     closeTab(id);
+  });
+  /* ── Vault: messages depuis le content script (preload-webview) ── */
+  webview.addEventListener('ipc-message', (e) => {
+    if (e.channel === 'vault:credentials-submitted') {
+      const { username, password, url } = e.args[0] || {};
+      if (password && !isPrivate) {
+        // Ne pas proposer pour les onglets privés
+        showSavePrompt(url, username, password, webview);
+      }
+    }
+    if (e.channel === 'vault:has-login-form') {
+      const { url } = e.args[0] || {};
+      if (url && !isPrivate) {
+        offerAutofill(url, webview);
+      }
+    }
   });
 
   webview.addEventListener('did-fail-load', (e) => {
@@ -508,13 +562,21 @@ function switchTab(id) {
   const ntpEl  = document.getElementById('new-tab-page');
   const dlPage = document.getElementById('downloads-page');
 
-  if (tab.isDownloadsTab) {
+  const pwPage = document.getElementById('passwords-page');
+  if (tab.isPasswordsTab) {
     ntpEl?.classList.add('hidden');
+    dlPage?.classList.add('hidden');
+    webviewContainer?.querySelectorAll('webview').forEach(wv => wv.classList.remove('active'));
+    window.PasswordsManager?.show();
+  } else if (tab.isDownloadsTab) {
+    ntpEl?.classList.add('hidden');
+    pwPage?.classList.add('hidden');
     webviewContainer?.querySelectorAll('webview').forEach(wv => wv.classList.remove('active'));
     dlPage?.classList.remove('hidden');
     window.DownloadManager?.renderFullPage?.();
   } else {
     dlPage?.classList.add('hidden');
+    pwPage?.classList.add('hidden');
     if (ntpEl) ntpEl.classList.toggle('hidden', !!tab.url);
     if (!tab.url) {
       // Mettre à jour le titre selon le mode actuel (Tor peut avoir changé)
@@ -882,6 +944,107 @@ function updateEngineUI() {
 /* ══════════════════════════════════════════════════════════════
    CUSTOM MENUBAR
 ══════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════
+   VAULT — PROMPT DE SAUVEGARDE & AUTOFILL
+══════════════════════════════════════════════════════════════ */
+
+let _pendingSave = null;   // {url, username, password, webview}
+let _savePromptTimer = null;
+
+function showSavePrompt(url, username, password, webview) {
+  try { new URL(url); } catch { return; }
+  const host = new URL(url).hostname;
+
+  // Annuler le prompt précédent si présent
+  dismissSavePrompt();
+
+  _pendingSave = { url, username, password, webview };
+
+  const banner = document.getElementById('vault-save-banner');
+  if (!banner) return;
+
+  document.getElementById('vault-save-host').textContent     = host;
+  document.getElementById('vault-save-username').textContent = username || '(no username)';
+
+  banner.classList.remove('hidden');
+  banner.style.animation = 'vaultBannerIn .2s ease';
+
+  // Auto-dismiss après 15s
+  _savePromptTimer = setTimeout(dismissSavePrompt, 15000);
+}
+
+function dismissSavePrompt() {
+  if (_savePromptTimer) { clearTimeout(_savePromptTimer); _savePromptTimer = null; }
+  const banner = document.getElementById('vault-save-banner');
+  if (banner) banner.classList.add('hidden');
+  _pendingSave = null;
+}
+
+async function offerAutofill(url, webview) {
+  if (!window.discowlAPI?.vault) return;
+  try {
+    const creds = await window.discowlAPI.vault.getForHost(url);
+    if (!creds?.length) return;
+
+    const banner = document.getElementById('vault-autofill-banner');
+    if (!banner) return;
+
+    const list = document.getElementById('vault-autofill-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    creds.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'vault-autofill-item';
+      btn.innerHTML = `<span class="vault-autofill-user">${escHtml(c.username || '(no username)')}</span><span class="vault-autofill-host">${escHtml(new URL(url).hostname)}</span>`;
+      btn.addEventListener('click', () => {
+        webview.send('vault:fill', { username: c.username, password: c.password });
+        dismissAutofill();
+      });
+      list.appendChild(btn);
+    });
+
+    banner.classList.remove('hidden');
+    banner.style.animation = 'vaultBannerIn .2s ease';
+    // Auto-dismiss après 8s
+    setTimeout(dismissAutofill, 8000);
+  } catch {}
+}
+
+function dismissAutofill() {
+  document.getElementById('vault-autofill-banner')?.classList.add('hidden');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function initVaultBanners() {
+  // Save banner — Enregistrer
+  document.getElementById('vault-save-yes')?.addEventListener('click', async () => {
+    if (!_pendingSave) return;
+    const { url, username, password } = _pendingSave;
+    try {
+      const host = new URL(url).hostname;
+      await window.discowlAPI.vault.save(host, username, password);
+      showToast('Password saved ✓', 'success');
+    } catch(e) {
+      showToast('Could not save password', 'error');
+    }
+    dismissSavePrompt();
+  });
+
+  // Save banner — Pas maintenant
+  document.getElementById('vault-save-no')?.addEventListener('click', dismissSavePrompt);
+
+  // Save banner — Jamais pour ce site (simple dismiss pour l'instant)
+  document.getElementById('vault-save-never')?.addEventListener('click', dismissSavePrompt);
+
+  // Autofill banner — fermer
+  document.getElementById('vault-autofill-close')?.addEventListener('click', dismissAutofill);
+}
+
 function initMenubar() {
   let openItem = null;
 
@@ -895,6 +1058,7 @@ function initMenubar() {
 
   function openMenu(item) {
     closeAll();
+    closeSandwich(); // ferme le sandwich si ouvert
     openItem = item;
     item.classList.add('open');
     const dropdown = item.querySelector('.mb-dropdown');
@@ -985,9 +1149,8 @@ function initMenubar() {
   mb('show-bookmarks',   () => window.SidebarManager?.toggleLeft());
 
   // Help
-  mb('about',            () => {
-    window.discowlAPI.app.getVersion().then(v => alert(`Discowl Browser v${v}\nA modern, privacy-focused browser.`));
-  });
+  mb('about',            () => window.discowlAPI.shell.openExternal('https://www.discowl.com'));
+  mb('passwords',        () => _openPasswordsTab());
   mb('github',           () => window.discowlAPI.shell.openExternal('https://github.com/VassiaTheGOAT/Discowl-Browser'));
   mb('check-updates',    async () => {
     showToast('Checking for updates…', 'info');
@@ -1035,6 +1198,9 @@ function setupSandwichMenu() {
   });
   document.getElementById('menu-zoom-out')?.addEventListener('click', () => {
     closeSandwich(); zoomActive(-0.1);
+  });
+  document.getElementById('menu-passwords')?.addEventListener('click', () => {
+    closeSandwich(); _openPasswordsTab();
   });
   document.getElementById('menu-settings')?.addEventListener('click', () => {
     closeSandwich(); window.SettingsManager?.open();
@@ -1084,6 +1250,8 @@ function setupKeyboardShortcuts() {
     if (ctrl && e.key === 'b') { e.preventDefault(); window.SidebarManager?.toggleLeft(); }
     if (ctrl && e.key === 'h') { e.preventDefault(); window.SidebarManager?.toggleRight(); }
     if (ctrl && e.key === 'r' || e.key === 'F5') { e.preventDefault(); getActiveTab()?.webview.reload(); }
+    if (ctrl && e.key === 'p') { e.preventDefault(); getActiveTab()?.webview?.print?.(); }
+    if (ctrl && e.key === 's') { e.preventDefault(); const t = getActiveTab(); if (t?.url) t.webview?.downloadURL?.(t.url); }
     if (ctrl && e.key === '=' || ctrl && e.key === '+') { e.preventDefault(); zoomActive(0.1); }
     if (ctrl && e.key === '-')  { e.preventDefault(); zoomActive(-0.1); }
     if (ctrl && e.key === '0')  { e.preventDefault(); zoomActive(0, true); }

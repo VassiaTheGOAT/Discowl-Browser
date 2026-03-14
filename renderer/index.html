@@ -355,6 +355,76 @@
 
         </div>
       </div>
+
+      <!-- Passwords full page -->
+      <div id="passwords-page" class="passwords-page hidden">
+        <div class="passwords-inner">
+
+          <!-- Header -->
+          <div class="passwords-header">
+            <div class="passwords-header-left">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                <rect x="3" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M7 10V7a4 4 0 018 0v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <circle cx="11" cy="15.5" r="1.5" fill="currentColor"/>
+              </svg>
+              <h2>Saved passwords</h2>
+            </div>
+            <div class="passwords-header-right">
+              <div class="passwords-search-wrap">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none">
+                  <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M10 10l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                <input id="passwords-search" type="text" placeholder="Search by website…" autocomplete="off"/>
+              </div>
+              <button id="passwords-page-close" class="passwords-close-btn" title="Close">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Lock prompt (si vault verrouillé) -->
+          <div id="passwords-lock-prompt" class="passwords-lock hidden">
+            <div class="passwords-lock-inner">
+              <div style="font-size:40px;margin-bottom:12px">🔒</div>
+              <div class="passwords-lock-title">Enter your master password</div>
+              <div class="passwords-lock-sub">Your passwords are encrypted. Enter your master password to view them.</div>
+              <div style="position:relative;margin-top:20px;width:300px">
+                <input id="passwords-master-input" type="password" class="passwords-lock-input" placeholder="Master password" autocomplete="current-password"/>
+                <button class="pw-eye-btn" id="passwords-lock-eye" style="position:absolute;right:10px;top:50%;transform:translateY(-50%)">
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5C1 7.5 3.5 3 7.5 3s6.5 4.5 6.5 4.5S12 12 7.5 12 1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
+                </button>
+              </div>
+              <div id="passwords-lock-error" style="color:#ef4444;font-size:12px;min-height:16px;margin-top:8px"></div>
+              <button id="passwords-lock-unlock" class="btn btn-primary" style="margin-top:12px;width:300px;padding:10px">Unlock</button>
+            </div>
+          </div>
+
+          <!-- Liste vide -->
+          <div id="passwords-empty" class="passwords-empty hidden">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity=".3">
+              <rect x="8" y="22" width="32" height="22" rx="4" stroke="currentColor" stroke-width="2"/>
+              <path d="M16 22V16a8 8 0 0116 0v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="24" cy="33" r="3" fill="currentColor"/>
+            </svg>
+            <p>No saved passwords yet</p>
+          </div>
+
+          <!-- Tableau -->
+          <div id="passwords-list" class="passwords-list hidden">
+            <div class="passwords-table-header">
+              <span>Website</span>
+              <span>Username</span>
+              <span>Password</span>
+              <span></span>
+            </div>
+            <div id="passwords-rows"></div>
+          </div>
+
+        </div>
+      </div>
+
       <!-- Downloads full page -->
       <div id="downloads-page" class="downloads-full-page hidden">
         <div class="downloads-full-inner">
@@ -422,7 +492,7 @@
   <div class="menu-item" id="menu-new-private" role="menuitem">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 15c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="13" y1="1" x2="3" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
     Private tab
-    <span class="shortcut">Ctrl+Shift+P</span>
+    <span class="shortcut">Ctrl+Shift+T</span>
   </div>
   <div class="menu-separator"></div>
   <div class="menu-item" id="menu-bookmarks" role="menuitem">
@@ -452,6 +522,10 @@
     <span class="shortcut">Ctrl+-</span>
   </div>
   <div class="menu-separator"></div>
+  <div class="menu-item" id="menu-passwords" role="menuitem">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="7" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    <span>Passwords</span>
+  </div>
   <div class="menu-item" id="menu-settings" role="menuitem">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
     Settings
@@ -551,12 +625,43 @@
 
 <!-- Scripts -->
 <script src="../components/bookmarks.js"></script>
+    <script src="../components/passwords.js"></script>
 <script src="../components/history.js"></script>
 <script src="../components/settings.js"></script>
 <script src="../components/sidebar.js"></script>
   <script src="../components/downloads.js"></script>
 <script src="renderer.js"></script>
 
+
+  <!-- ── Vault: Save password banner ──────────────────────── -->
+  <div id="vault-save-banner" class="vault-banner hidden" role="alert">
+    <svg class="vault-banner-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+    <div class="vault-banner-text">
+      <span>Save password for <strong id="vault-save-host"></strong>?</span>
+      <span class="vault-banner-sub" id="vault-save-username"></span>
+    </div>
+    <div class="vault-banner-actions">
+      <button id="vault-save-yes"   class="vault-banner-btn primary">Save</button>
+      <button id="vault-save-no"    class="vault-banner-btn">Not now</button>
+      <button id="vault-save-never" class="vault-banner-btn muted">Never</button>
+    </div>
+  </div>
+
+  <!-- ── Vault: Autofill banner ────────────────────────────── -->
+  <div id="vault-autofill-banner" class="vault-banner vault-banner-autofill hidden" role="complementary">
+    <svg class="vault-banner-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+    <div class="vault-banner-text">Saved credentials</div>
+    <div id="vault-autofill-list" class="vault-autofill-list"></div>
+    <button id="vault-autofill-close" class="vault-banner-close" title="Close">
+      <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
 
   <!-- ── Lock Screen ─────────────────────────────────────────── -->
   <div id="lock-screen" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);align-items:center;justify-content:center;">

@@ -7,6 +7,7 @@ const os   = require('os');
 
 const TorManager      = require('./torManager');
 const passwordManager = require('./passwordManager');
+const vaultManager    = require('./vaultManager');
 const { runUpdater, registerIpc: registerUpdaterIpc } = require('./updater');
 const Storage    = require('../store/storage');
 
@@ -124,6 +125,14 @@ app.whenReady().then(async () => {
   torManager = new TorManager();
 
   const settings = storage.getSettings();
+
+  // Déverrouiller le vault selon le mode
+  if (passwordManager.isEnabled()) {
+    // Vault protégé — sera déverrouillé après authentification (voir vault:unlock IPC)
+    console.log('[Vault] Protégé par mot de passe maître — en attente d\'authentification');
+  } else {
+    vaultManager.unlockAnonymous();
+  }
   nativeTheme.themeSource = settings.theme === 'dark' ? 'dark' : 'light';
 
   // Enregistrer les IPC update (check manuel depuis Settings)
@@ -354,3 +363,16 @@ ipcMain.handle('password:isEnabled', ()           => passwordManager.isEnabled()
 ipcMain.handle('password:setup',     (_, pwd)     => passwordManager.setup(pwd));
 ipcMain.handle('password:verify',    (_, pwd)     => passwordManager.verify(pwd));
 ipcMain.handle('password:disable',   (_, pwd)     => passwordManager.disable(pwd));
+/* ══════════════════════════════════════════════════════════════
+   VAULT IPC
+══════════════════════════════════════════════════════════════ */
+// Appelé après vérification du mot de passe maître (lock screen)
+ipcMain.handle('vault:unlock',      async (_, pwd)  => vaultManager.unlock(pwd));
+ipcMain.handle('vault:isUnlocked',  ()              => vaultManager.isUnlocked());
+ipcMain.handle('vault:save',        (_, h, u, p)    => vaultManager.save(h, u, p));
+ipcMain.handle('vault:getForHost',  (_, url)        => vaultManager.getForHost(url));
+ipcMain.handle('vault:getAll',      ()              => vaultManager.getAll());
+ipcMain.handle('vault:getById',     (_, id)         => vaultManager.getById(id));
+ipcMain.handle('vault:delete',      (_, id)         => vaultManager.delete(id));
+// Appelé quand le mot de passe maître est désactivé
+ipcMain.handle('vault:removeProtection', ()         => { vaultManager.removePasswordProtection(); return { ok: true }; });

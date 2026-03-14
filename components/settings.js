@@ -261,7 +261,7 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.1.5';
+      if (vEl) vEl.textContent = v || '1.1.7';
     }).catch(() => {});
 
     sec.appendChild(makeGroup('Application', [
@@ -718,7 +718,10 @@ const SettingsManager = (() => {
         const res = await window.discowlAPI.password.disable(pwd);
         if (res.ok) {
           _pwEnabled = false;
-          chk.checked = false;
+          // Retirer la protection du vault
+          window.discowlAPI.vault?.removeProtection().catch(() => {});
+          const input = chk.querySelector('input');
+          if (input) input.checked = false;
           disableForm.style.display = 'none';
           if (disablePwInput) disablePwInput.value = '';
           showToast('Password disabled', 'success');

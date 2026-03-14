@@ -1935,3 +1935,321 @@ html[data-theme="light"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
   min-height: 14px;
   font-weight: 500;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   VAULT BANNERS
+══════════════════════════════════════════════════════════════ */
+@keyframes vaultBannerIn {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+.vault-banner {
+  position: fixed;
+  top: 56px;            /* juste sous la navbar */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  font-size: 12px;
+  color: var(--text-primary);
+  max-width: 560px;
+  width: max-content;
+  white-space: nowrap;
+}
+
+.vault-banner.hidden { display: none !important; }
+
+.vault-banner-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.vault-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vault-banner-sub {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.vault-banner-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: 6px;
+}
+
+.vault-banner-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background .12s;
+  white-space: nowrap;
+}
+.vault-banner-btn:hover { background: var(--bg-hover); }
+.vault-banner-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 500;
+}
+.vault-banner-btn.primary:hover { opacity: .88; }
+.vault-banner-btn.muted { color: var(--text-muted); }
+
+.vault-banner-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.vault-banner-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Autofill list */
+.vault-autofill-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.vault-autofill-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-hover);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: background .12s;
+}
+.vault-autofill-item:hover { background: var(--border); }
+.vault-autofill-user { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+.vault-autofill-host { font-size: 10px; color: var(--text-muted); }
+
+/* ══════════════════════════════════════════════════════════════
+   PASSWORDS PAGE
+══════════════════════════════════════════════════════════════ */
+.passwords-page {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-base);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.passwords-page.hidden { display: none !important; }
+
+.passwords-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px 24px;
+  box-sizing: border-box;
+}
+
+/* Header */
+.passwords-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+}
+.passwords-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+}
+.passwords-header-left h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+.passwords-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.passwords-search-wrap {
+  position: relative;
+}
+.passwords-search-wrap input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 8px 32px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  outline: none;
+  width: 220px;
+  transition: border-color .15s;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.passwords-search-wrap input:focus { border-color: var(--accent); }
+
+.passwords-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: background .12s;
+}
+.passwords-close-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Lock */
+.passwords-lock {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.passwords-lock.hidden { display: none; }
+.passwords-lock-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.passwords-lock-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.passwords-lock-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  max-width: 320px;
+}
+.passwords-lock-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 38px 10px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  outline: none;
+  box-sizing: border-box;
+  -webkit-user-select: text;
+  user-select: text;
+  transition: border-color .15s;
+}
+.passwords-lock-input:focus { border-color: var(--accent); }
+
+/* Empty */
+.passwords-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+}
+.passwords-empty.hidden { display: none; }
+.passwords-empty p { font-size: 14px; margin: 0; }
+
+/* Table */
+.passwords-list { flex: 1; overflow-y: auto; }
+.passwords-list.hidden { display: none; }
+
+.passwords-table-header {
+  display: grid;
+  grid-template-columns: 2fr 2fr 2fr 80px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.passwords-row {
+  display: grid;
+  grid-template-columns: 2fr 2fr 2fr 80px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background .1s;
+}
+.passwords-row:hover { background: var(--bg-hover); }
+
+.passwords-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.passwords-host-cell { gap: 8px; }
+.passwords-host-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.passwords-value-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.passwords-pw-dots {
+  letter-spacing: 2px;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+.passwords-actions-cell { justify-content: flex-end; gap: 4px; }
+
+.passwords-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 5px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: background .1s, color .1s;
+}
+.passwords-icon-btn:hover { background: var(--border); color: var(--text-primary); }
+.passwords-delete-btn:hover { color: var(--red); }

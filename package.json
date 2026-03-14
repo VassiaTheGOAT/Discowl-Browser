@@ -1,36 +1,35 @@
 {
   "name": "discowl-browser",
-  "version": "1.1.8",
-  "description": "Discowl Browser — A new gen browser",
+  "version": "1.1.9",
+  "description": "Discowl Browser - A new gen browser",
   "main": "main/main.js",
-  "author": "QUESNEL-TALLEC Vassia",
+  "author": "Discowl",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "build:win":   "electron-builder --win --publish never",
-    "build:mac":   "electron-builder --mac --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:mac": "electron-builder --mac --publish never",
     "build:linux": "electron-builder --linux --publish never",
-    "release":    "electron-builder --win --publish always"
+    "release": "electron-builder --win --publish always"
   },
   "dependencies": {
     "electron-updater": "^6.1.7"
   },
   "devDependencies": {
-    "electron":         "^28.1.0",
+    "electron": "^28.1.0",
     "electron-builder": "^24.9.1"
   },
   "build": {
-    "appId":       "com.discowl.browser",
+    "appId": "com.discowl.browser",
     "productName": "Discowl Browser",
-
     "publish": {
       "provider": "github",
-      "owner":    "VassiaTheGOAT",
-      "repo":     "Discowl-Browser"
+      "owner": "VassiaTheGOAT",
+      "repo": "Discowl-Browser"
     },
-
-    "directories": { "output": "dist" },
-
+    "directories": {
+      "output": "dist"
+    },
     "files": [
       "main/**",
       "preload/**",
@@ -40,28 +39,32 @@
       "assets/**",
       "package.json"
     ],
-
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "icon": "assets/logo-discowl.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
     },
     "nsis": {
-      "oneClick":          false,
+      "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName":      "Discowl Browser"
+      "createDesktopShortcut": "ifNotPresent",
+      "createStartMenuShortcut": "ifNotPresent",
+      "shortcutName": "Discowl Browser"
     },
-
     "mac": {
       "target": "dmg",
-      "icon":   "assets/icon.icns"
+      "icon": "assets/icon.icns"
     },
     "linux": {
       "target": "AppImage",
-      "icon":   "assets/icon.png"
+      "icon": "assets/icon.png"
     },
-
     "extraResources": [
       {
         "from": "tor",

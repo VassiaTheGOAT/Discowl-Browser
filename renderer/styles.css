@@ -1968,7 +1968,7 @@ html[data-theme="light"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
 
 .vault-banner {
   position: fixed;
-  top: 56px;            /* juste sous la navbar */
+  top: 56px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 9000;

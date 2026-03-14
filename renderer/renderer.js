@@ -350,14 +350,21 @@ function createTab(url = 'about:newtab', isPrivate = false) {
     if (e.channel === 'vault:credentials-submitted') {
       const { username, password, url } = e.args[0] || {};
       if (password && !isPrivate) {
-        // Ne pas proposer pour les onglets privés
-        showSavePrompt(url, username, password, webview);
+        // Vérifier si ces credentials existent déjà avant de proposer
+        window.discowlAPI.vault.getForHost(url).then(existing => {
+          const alreadySaved = existing?.some(e =>
+            e.username === username
+          );
+          if (!alreadySaved) showSavePrompt(url, username, password, webview);
+        }).catch(() => {
+          showSavePrompt(url, username, password, webview);
+        });
       }
     }
-    if (e.channel === 'vault:has-login-form') {
-      const { url } = e.args[0] || {};
+    if (e.channel === 'vault:field-focused') {
+      const { url, rect } = e.args[0] || {};
       if (url && !isPrivate) {
-        offerAutofill(url, webview);
+        offerAutofill(url, webview, rect);
       }
     }
   });
@@ -981,7 +988,7 @@ function dismissSavePrompt() {
   _pendingSave = null;
 }
 
-async function offerAutofill(url, webview) {
+async function offerAutofill(url, webview, fieldRect) {
   if (!window.discowlAPI?.vault) return;
   try {
     const creds = await window.discowlAPI.vault.getForHost(url);
@@ -1005,12 +1012,33 @@ async function offerAutofill(url, webview) {
       list.appendChild(btn);
     });
 
+    // Positionner le banner sous le champ focusé dans le webview
+    if (fieldRect) {
+      const wvRect = webview.getBoundingClientRect();
+      const absLeft   = wvRect.left + fieldRect.left;
+      const absBottom = wvRect.top  + fieldRect.bottom;
+      banner.style.left      = Math.max(4, absLeft) + 'px';
+      banner.style.top       = (absBottom + 4) + 'px';
+      banner.style.transform = 'none';
+      banner.style.maxWidth  = Math.max(fieldRect.width, 260) + 'px';
+    } else {
+      // Fallback : centré sous la navbar
+      banner.style.left      = '50%';
+      banner.style.top       = '56px';
+      banner.style.transform = 'translateX(-50%)';
+      banner.style.maxWidth  = '560px';
+    }
+
     banner.classList.remove('hidden');
-    banner.style.animation = 'vaultBannerIn .2s ease';
-    // Auto-dismiss après 8s
-    setTimeout(dismissAutofill, 8000);
+    banner.style.animation = 'vaultBannerIn .15s ease';
+
+    // Pas d'auto-dismiss — reste visible tant que l'utilisateur interagit
+    clearTimeout(_autofillTimer);
+    _autofillTimer = setTimeout(dismissAutofill, 12000);
   } catch {}
 }
+
+let _autofillTimer = null;
 
 function dismissAutofill() {
   document.getElementById('vault-autofill-banner')?.classList.add('hidden');

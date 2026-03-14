@@ -1045,6 +1045,25 @@ function initVaultBanners() {
   document.getElementById('vault-autofill-close')?.addEventListener('click', dismissAutofill);
 }
 
+
+function positionNewtabLogo() {
+  const brand  = document.querySelector('.newtab-brand');
+  const title  = document.getElementById('newtab-title');
+  const logo   = document.querySelector('.newtab-logo');
+  if (!brand || !title || !logo) return;
+
+  const brandRect = brand.getBoundingClientRect();
+  const titleRect = title.getBoundingClientRect();
+  const gap = 10; // px entre logo et titre
+
+  // Centre du titre par rapport au brand container
+  const titleCenter = titleRect.left - brandRect.left + titleRect.width / 2;
+  // Logo doit se terminer à gauche du titre
+  const logoLeft = titleCenter - titleRect.width / 2 - gap - logo.offsetWidth;
+
+  brand.style.setProperty('--logo-left', logoLeft + 'px');
+}
+
 function initMenubar() {
   let openItem = null;
 
@@ -1239,6 +1258,11 @@ function _onOverlayClick() {
 /* ══════════════════════════════════════════════════════════════
    KEYBOARD SHORTCUTS
 ══════════════════════════════════════════════════════════════ */
+window.addEventListener('resize', () => {
+  const ntp = document.getElementById('new-tab-page');
+  if (ntp && !ntp.classList.contains('hidden')) positionNewtabLogo();
+});
+
 function setupKeyboardShortcuts() {
   document.addEventListener('keydown', (e) => {
     const ctrl = e.ctrlKey || e.metaKey;
@@ -1320,6 +1344,7 @@ function updateNewtabMode(isPrivate) {
   const ntpEl   = document.getElementById('new-tab-page');
   const titleEl = document.getElementById('newtab-title');
   if (!ntpEl || !titleEl) return;
+  requestAnimationFrame(positionNewtabLogo);
 
   const torActive = !!settings.torEnabled;
 

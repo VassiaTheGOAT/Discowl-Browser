@@ -31,8 +31,9 @@
     }
 
     .logo {
-      width: 52px;
-      height: 52px;
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
     }
 
     .brand {
@@ -110,32 +111,7 @@
 <body>
 
   <div class="header">
-    <!-- Logo SVG Discowl inline -->
-    <svg class="logo" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#0cc0df"/>
-          <stop offset="100%" stop-color="#ffde59"/>
-        </linearGradient>
-      </defs>
-      <circle cx="32" cy="32" r="30" fill="#0f1117" stroke="url(#g1)" stroke-width="2.5"/>
-      <!-- Corps hibou -->
-      <ellipse cx="32" cy="38" rx="14" ry="16" fill="url(#g1)" opacity="0.15"/>
-      <ellipse cx="32" cy="38" rx="14" ry="16" fill="none" stroke="url(#g1)" stroke-width="1.8"/>
-      <!-- Tête -->
-      <circle cx="32" cy="24" r="12" fill="url(#g1)" opacity="0.15"/>
-      <circle cx="32" cy="24" r="12" fill="none" stroke="url(#g1)" stroke-width="1.8"/>
-      <!-- Yeux -->
-      <circle cx="27" cy="23" r="3.5" fill="url(#g1)"/>
-      <circle cx="37" cy="23" r="3.5" fill="url(#g1)"/>
-      <circle cx="26.5" cy="22.5" r="1.2" fill="#0f1117"/>
-      <circle cx="36.5" cy="22.5" r="1.2" fill="#0f1117"/>
-      <!-- Bec -->
-      <path d="M30 27 L32 30 L34 27 Z" fill="url(#g1)"/>
-      <!-- Oreilles -->
-      <path d="M22 15 L24 22 L28 18 Z" fill="url(#g1)" opacity="0.7"/>
-      <path d="M42 15 L40 22 L36 18 Z" fill="url(#g1)" opacity="0.7"/>
-    </svg>
+    <img src="../assets/logo-discowl.png" class="logo" alt="Discowl" draggable="false"/>
     <div class="brand">
       <div class="brand-name">Discowl</div>
       <div class="brand-version" id="ver">v—</div>

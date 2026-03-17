@@ -186,7 +186,13 @@ class VaultManager {
 
   isUnlocked() { return this._key !== null; }
 
-  lock() { this._key = null; }
+  lock() {
+    // Écraser la clé en mémoire avant de l'abandonner
+    if (this._key) {
+      try { this._key.fill(0); } catch {}
+      this._key = null;
+    }
+  }
 
   /* ══════════════════════════════════════════════════════════
      CRUD
@@ -279,4 +285,10 @@ class VaultManager {
   }
 }
 
-module.exports = new VaultManager();
+const _vaultInstance = new VaultManager();
+
+// Zeroing de la clé à la fermeture de l'app
+const { app: _app } = require('electron');
+_app.on('before-quit', () => { _vaultInstance.lock(); });
+
+module.exports = _vaultInstance;

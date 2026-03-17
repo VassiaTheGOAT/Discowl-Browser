@@ -13,7 +13,10 @@ contextBridge.exposeInMainWorld('discowlAPI', {
   favorites: {
     get:       ()       => ipcRenderer.invoke('favorites:get'),
     save:      (data)   => ipcRenderer.invoke('favorites:save', data),
-    onUpdated: (cb)     => ipcRenderer.on('favorites:updated', (_, d) => cb(d))
+    onUpdated: (cb)     => {
+      ipcRenderer.removeAllListeners('favorites:updated');
+      ipcRenderer.on('favorites:updated', (_, d) => cb(d));
+    }
   },
 
   /* ── Historique (history.json) ───────────────────────────── */
@@ -23,7 +26,10 @@ contextBridge.exposeInMainWorld('discowlAPI', {
     clear:     ()       => ipcRenderer.invoke('history:clear'),
     delete:    (id)     => ipcRenderer.invoke('history:delete', id),
     search:    (q)      => ipcRenderer.invoke('history:search', q),
-    onUpdated: (cb)     => ipcRenderer.on('history:updated', (_, d) => cb(d))
+    onUpdated: (cb)     => {
+      ipcRenderer.removeAllListeners('history:updated');
+      ipcRenderer.on('history:updated', (_, d) => cb(d));
+    }
   },
 
   /* ── Paramètres ──────────────────────────────────────────── */
@@ -85,7 +91,10 @@ contextBridge.exposeInMainWorld('discowlAPI', {
     getBounds:         ()  => ipcRenderer.invoke('window:getBounds'),
     getWorkArea:       ()  => ipcRenderer.invoke('window:getWorkArea'),
     setBounds:         (b) => ipcRenderer.send('window:setBounds', b),
-    onMaximized:       (cb)=> ipcRenderer.on('window:maximized', (_, v) => cb(v)),
+    onMaximized:       (cb)=> {
+      ipcRenderer.removeAllListeners('window:maximized');
+      ipcRenderer.on('window:maximized', (_, v) => cb(v));
+    },
   },
   /* ── Password / Lock ─────────────────────────────────────── */
   password: {

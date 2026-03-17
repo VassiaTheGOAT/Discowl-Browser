@@ -6,6 +6,7 @@ const fs   = require('fs');
 const os   = require('os');
 
 const TorManager      = require('./torManager');
+
 const passwordManager = require('./passwordManager');
 const vaultManager    = require('./vaultManager');
 const { runUpdater, registerIpc: registerUpdaterIpc } = require('./updater');
@@ -292,13 +293,28 @@ ipcMain.handle('favorites:save', (_, bookmarks) => {
    IPC — Historique
 ══════════════════════════════════════════════════════════════ */
 ipcMain.handle('history:get',    ()         => storage.getHistory());
-ipcMain.handle('history:add',    (_, entry) => { storage.addHistory(entry); return true; });
+ipcMain.handle('history:add', (_, entry) => {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+  if (typeof entry.url   !== 'string' || entry.url.length   > 2048) return false;
+  if (typeof entry.title !== 'string' || entry.title.length > 512)  entry.title = entry.title?.slice(0,512) ?? '';
+  // Rejeter les URLs non-http(s)
+  try {
+    const p = new URL(entry.url);
+    if (!['https:','http:'].includes(p.protocol)) return false;
+  } catch { return false; }
+  storage.addHistory({ url: entry.url, title: entry.title, favicon: typeof entry.favicon === 'string' ? entry.favicon.slice(0,512) : '' });
+  return true;
+});
 ipcMain.handle('history:clear',  ()         => {
   storage.clearHistory();
   BrowserWindow.getAllWindows().forEach(w => w.webContents.send('history:updated', []));
   return true;
 });
-ipcMain.handle('history:delete', (_, id)    => { storage.deleteHistory(id); return true; });
+ipcMain.handle('history:delete', (_, id) => {
+  if (typeof id !== 'string' || id.length > 128) return false;
+  storage.deleteHistory(id);
+  return true;
+});
 ipcMain.handle('history:search', (_, q)     => {
   const h = storage.getHistory();
   if (!q) return h;
@@ -312,10 +328,21 @@ ipcMain.handle('history:search', (_, q)     => {
 ipcMain.handle('settings:get', () => storage.getSettings());
 
 ipcMain.handle('settings:save', async (_, newSettings) => {
+  if (!newSettings || typeof newSettings !== 'object' || Array.isArray(newSettings)) return false;
+  // Whitelist des clés autorisées — aucune clé arbitraire ne peut être injectée
+  const ALLOWED_KEYS = new Set([
+    'defaultEngine','theme','torEnabled','homePage','newTabPage',
+    'downloadPath','language','fontSize','showBookmarksToolbar',
+    'blockAds','doNotTrack','saveCookies','toolbarItems','customTitlebar'
+  ]);
+  const safe = {};
+  for (const [k, v] of Object.entries(newSettings)) {
+    if (ALLOWED_KEYS.has(k)) safe[k] = v;
+  }
   const old = storage.getSettings();
-  storage.saveSettings(newSettings);
-  if (newSettings.theme !== old.theme) {
-    nativeTheme.themeSource = newSettings.theme === 'dark' ? 'dark' : 'light';
+  storage.saveSettings(safe);
+  if (safe.theme !== undefined && safe.theme !== old.theme) {
+    nativeTheme.themeSource = safe.theme === 'dark' ? 'dark' : 'light';
   }
   return true;
 });
@@ -340,17 +367,63 @@ ipcMain.handle('tor:status', () => ({
 /* ══════════════════════════════════════════════════════════════
    IPC — Downloads
 ══════════════════════════════════════════════════════════════ */
-ipcMain.handle('downloads:openFile',   (_, p) => shell.openPath(p));
-ipcMain.handle('downloads:revealFile', (_, p) => shell.showItemInFolder(p));
+ipcMain.handle('downloads:openFile', async (_, p) => {
+  if (typeof p !== 'string') return;
+  const resolved = path.resolve(p);
+  const downloadsDir = app.getPath('downloads');
+  const userDataDir  = app.getPath('userData');
+  // Autoriser seulement downloads et userData (pour les exports)
+  if (!resolved.startsWith(downloadsDir) && !resolved.startsWith(userDataDir)) {
+    console.warn('[Security] Blocked openFile outside allowed dirs:', resolved);
+    return;
+  }
+  return shell.openPath(resolved);
+});
+ipcMain.handle('downloads:revealFile', async (_, p) => {
+  if (typeof p !== 'string') return;
+  const resolved = path.resolve(p);
+  const downloadsDir = app.getPath('downloads');
+  const userDataDir  = app.getPath('userData');
+  if (!resolved.startsWith(downloadsDir) && !resolved.startsWith(userDataDir)) {
+    console.warn('[Security] Blocked revealFile outside allowed dirs:', resolved);
+    return;
+  }
+  return shell.showItemInFolder(resolved);
+});
 ipcMain.handle('downloads:cancel',     (_, id) => {
   // Le cancel se fait via l'objet DownloadItem — on garde juste l'id côté renderer
   // pour supprimer visuellement ; l'annulation réelle est gérée côté renderer
   return true;
 });
 
-ipcMain.handle('shell:openExternal', (_, url)    => shell.openExternal(url));
-ipcMain.handle('shell:openPath',     (_, folder) => shell.openPath(folder));
-ipcMain.handle('app:getPath',        (_, name)   => { try { return app.getPath(name); } catch { return ''; } });
+ipcMain.handle('shell:openExternal', (_, url) => {
+  // Whitelist des protocoles autorisés uniquement
+  if (typeof url !== 'string') return;
+  try {
+    const parsed = new URL(url);
+    if (!['https:', 'http:', 'mailto:'].includes(parsed.protocol)) {
+      console.warn('[Security] Blocked openExternal with protocol:', parsed.protocol);
+      return;
+    }
+    shell.openExternal(url);
+  } catch { /* URL invalide — ignorer */ }
+});
+ipcMain.handle('shell:openPath', (_, folder) => {
+  if (typeof folder !== 'string') return;
+  // Autoriser uniquement les chemins dans userData
+  const userDataPath = app.getPath('userData');
+  const resolvedPath = path.resolve(folder);
+  if (!resolvedPath.startsWith(userDataPath)) {
+    console.warn('[Security] Blocked openPath outside userData:', resolvedPath);
+    return;
+  }
+  shell.openPath(resolvedPath);
+});
+ipcMain.handle('app:getPath', (_, name) => {
+  const ALLOWED = ['userData', 'downloads', 'temp'];
+  if (!ALLOWED.includes(name)) return '';
+  try { return app.getPath(name); } catch { return ''; }
+});
 ipcMain.handle('app:getVersion',     ()          => app.getVersion());
 ipcMain.handle('app:getName',        ()          => app.getName());
 ipcMain.handle('app:relaunch',       ()          => { app.relaunch(); app.exit(0); });
@@ -374,7 +447,18 @@ ipcMain.handle('password:disable',   (_, pwd)     => passwordManager.disable(pwd
 ══════════════════════════════════════════════════════════════ */
 ipcMain.handle('window:getBounds',   () => mainWindow?.getBounds());
 ipcMain.handle('window:getWorkArea', () => screen.getPrimaryDisplay().workArea);
-ipcMain.on('window:setBounds',  (_, b) => mainWindow?.setBounds(b));
+ipcMain.on('window:setBounds', (_, b) => {
+  if (!b || typeof b !== 'object') return;
+  const { x, y, width, height } = b;
+  if (typeof width  !== 'number' || width  < 200 || width  > 7680) return;
+  if (typeof height !== 'number' || height < 150 || height > 4320) return;
+  const safe = {};
+  if (typeof x === 'number') safe.x = Math.round(x);
+  if (typeof y === 'number') safe.y = Math.round(y);
+  safe.width  = Math.round(width);
+  safe.height = Math.round(height);
+  mainWindow?.setBounds(safe);
+});
 ipcMain.on('window:minimize',  () => mainWindow?.minimize());
 ipcMain.on('window:maximize',  () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -390,10 +474,25 @@ ipcMain.handle('window:customTitlebar', () => USE_CUSTOM_TITLEBAR);
 // Appelé après vérification du mot de passe maître (lock screen)
 ipcMain.handle('vault:unlock',      async (_, pwd)  => vaultManager.unlock(pwd));
 ipcMain.handle('vault:isUnlocked',  ()              => vaultManager.isUnlocked());
-ipcMain.handle('vault:save',        (_, h, u, p)    => vaultManager.save(h, u, p));
-ipcMain.handle('vault:getForHost',  (_, url)        => vaultManager.getForHost(url));
+ipcMain.handle('vault:save', (_, host, username, password) => {
+  if (typeof host     !== 'string' || host.length     > 253)   return { ok: false, error: 'Invalid host' };
+  if (typeof username !== 'string' || username.length > 512)   return { ok: false, error: 'Username too long' };
+  if (typeof password !== 'string' || password.length > 4096)  return { ok: false, error: 'Password too long' };
+  if (!password) return { ok: false, error: 'Empty password' };
+  return vaultManager.save(host, username, password);
+});
+ipcMain.handle('vault:getForHost', (_, url) => {
+  if (typeof url !== 'string' || url.length > 2048) return [];
+  return vaultManager.getForHost(url);
+});
 ipcMain.handle('vault:getAll',      ()              => vaultManager.getAll());
-ipcMain.handle('vault:getById',     (_, id)         => vaultManager.getById(id));
-ipcMain.handle('vault:delete',      (_, id)         => vaultManager.delete(id));
+ipcMain.handle('vault:getById', (_, id) => {
+  if (typeof id !== 'string' || id.length > 64) return null;
+  return vaultManager.getById(id);
+});
+ipcMain.handle('vault:delete', (_, id) => {
+  if (typeof id !== 'string' || id.length > 64) return { ok: false };
+  return vaultManager.delete(id);
+});
 // Appelé quand le mot de passe maître est désactivé
 ipcMain.handle('vault:removeProtection', ()         => { vaultManager.removePasswordProtection(); return { ok: true }; });

@@ -72,6 +72,9 @@
         "from": "tor",
         "to": "tor"
       }
-    ]
+    ],
+
+    "artifactName": "Discowl-Setup.exe"
+    
   }
 }

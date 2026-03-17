@@ -13,7 +13,6 @@
 
 const { BrowserWindow, ipcMain, app } = require('electron');
 const https  = require('https');
-const http   = require('http');
 const fs     = require('fs');
 const path   = require('path');
 const os     = require('os');
@@ -60,13 +59,18 @@ function isNewer(a, b) {
 }
 
 // GET avec suivi des redirections
-function getJson(url, cb) {
-  const mod = url.startsWith('https') ? https : http;
-  const req = mod.get(url, {
+function getJson(url, cb, _depth = 0) {
+  if (_depth > 5) return cb(new Error('Too many redirects'));
+  // HTTPS uniquement — jamais de downgrade vers HTTP
+  if (!url.startsWith('https://')) return cb(new Error('HTTPS required'));
+  const req = https.get(url, {
     headers: { 'User-Agent': 'DiscowlBrowser-Updater/1.0' }
   }, (res) => {
     if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
-      return getJson(res.headers.location, cb);
+      const loc = res.headers.location || '';
+      // Rejeter les redirections HTTP
+      if (!loc.startsWith('https://')) return cb(new Error('Redirect to non-HTTPS blocked'));
+      return getJson(loc, cb, _depth + 1);
     }
     let data = '';
     res.on('data', chunk => { data += chunk; });
@@ -80,14 +84,17 @@ function getJson(url, cb) {
 }
 
 // Téléchargement avec progression + suivi redirections
-function downloadFile(url, destPath, onProgress, cb) {
-  const mod = url.startsWith('https') ? https : http;
-  const req = mod.get(url, {
+function downloadFile(url, destPath, onProgress, cb, _depth = 0) {
+  if (_depth > 5) return cb(new Error('Too many redirects'));
+  if (!url.startsWith('https://')) return cb(new Error('HTTPS required'));
+  const req = https.get(url, {
     headers: { 'User-Agent': 'DiscowlBrowser-Updater/1.0' }
   }, (res) => {
-    // Suivre les redirections
+    // Suivre les redirections HTTPS uniquement
     if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-      return downloadFile(res.headers.location, destPath, onProgress, cb);
+      const loc = res.headers.location || '';
+      if (!loc.startsWith('https://')) return cb(new Error('Redirect to non-HTTPS blocked'));
+      return downloadFile(loc, destPath, onProgress, cb, _depth + 1);
     }
     if (res.statusCode !== 200) {
       return cb(new Error(`HTTP ${res.statusCode}`));
@@ -214,7 +221,25 @@ function checkAndUpdate() {
       return;
     }
 
-    console.log('[Updater] Downloading:', exeAsset.name, 'from', exeAsset.browser_download_url);
+    // Valider que l'URL de téléchargement vient bien de GitHub
+    const dlUrl = exeAsset.browser_download_url || '';
+    try {
+      const parsed = new URL(dlUrl);
+      if (parsed.protocol !== 'https:' ||
+          !parsed.hostname.endsWith('github.com') &&
+          !parsed.hostname.endsWith('githubusercontent.com')) {
+        console.error('[Security] Blocked non-GitHub download URL:', dlUrl);
+        send('error', { message: 'Download URL rejected for security reasons' });
+        launch(1000);
+        return;
+      }
+    } catch {
+      console.error('[Security] Invalid download URL');
+      send('error', { message: 'Invalid download URL' });
+      launch(1000);
+      return;
+    }
+    console.log('[Updater] Downloading:', exeAsset.name, 'from', dlUrl);
     send('available', { version: latestVersion });
 
     // Télécharger dans le dossier temp
@@ -241,6 +266,13 @@ function checkAndUpdate() {
         // Lancer l'installeur en silent + quitter
         setTimeout(() => {
           try {
+            // Vérifier que l'extension est bien .exe avant de lancer
+            if (!tmpPath.toLowerCase().endsWith('.exe')) {
+              console.error('[Security] Downloaded file is not an .exe:', tmpPath);
+              send('error', { message: 'Downloaded file rejected for security reasons' });
+              launch(1000);
+              return;
+            }
             // /S = silent install NSIS, remplace l'installation existante
             spawn(tmpPath, ['/S'], {
               detached: true,

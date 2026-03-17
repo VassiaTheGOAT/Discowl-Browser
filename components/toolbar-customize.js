@@ -99,6 +99,66 @@ const ToolbarCustomizer = (() => {
     }
 
     setupDropZones();
+    renderPreview();
+  }
+
+  function renderPreview() {
+    const bar = document.getElementById('ct-preview-bar');
+    if (!bar) return;
+
+    const cfg    = getConfig();
+    const active = cfg.filter(i => i.visible);
+
+    bar.innerHTML = '';
+
+    // Boutons de navigation gauche (back/forward/reload/home)
+    const NAV_IDS = ['back','forward','reload','home'];
+    const navBtns = active.filter(i => NAV_IDS.includes(i.id));
+    if (navBtns.length) {
+      const navGroup = document.createElement('div');
+      navGroup.style.cssText = 'display:flex;align-items:center;gap:2px;flex-shrink:0';
+      navBtns.forEach(item => {
+        const def = getDef(item.id);
+        if (!def) return;
+        const btn = document.createElement('div');
+        btn.className = 'ct-preview-btn';
+        btn.title = def.label;
+        btn.innerHTML = def.svg;
+        navGroup.appendChild(btn);
+      });
+      bar.appendChild(navGroup);
+    }
+
+    // URL bar — toujours présente, flex:1
+    const urlBar = document.createElement('div');
+    urlBar.className = 'ct-preview-urlbar';
+    urlBar.innerHTML = `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="2" y="6" width="10" height="7" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span>Search or enter address…</span>`;
+    bar.appendChild(urlBar);
+
+    // Boutons droite (bookmarks/history/downloads)
+    const RIGHT_IDS = ['bookmarks','history','downloads'];
+    const rightBtns = active.filter(i => RIGHT_IDS.includes(i.id));
+    if (rightBtns.length) {
+      const rightGroup = document.createElement('div');
+      rightGroup.style.cssText = 'display:flex;align-items:center;gap:2px;flex-shrink:0';
+      rightBtns.forEach(item => {
+        const def = getDef(item.id);
+        if (!def) return;
+        const btn = document.createElement('div');
+        btn.className = 'ct-preview-btn';
+        btn.title = def.label;
+        btn.innerHTML = def.svg;
+        rightGroup.appendChild(btn);
+      });
+      bar.appendChild(rightGroup);
+    }
+
+    // Bouton sandwich — toujours présent
+    const sandwich = document.createElement('div');
+    sandwich.className = 'ct-preview-btn';
+    sandwich.title = 'Menu';
+    sandwich.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="4" r="1.4" fill="currentColor"/><circle cx="9" cy="9" r="1.4" fill="currentColor"/><circle cx="9" cy="14" r="1.4" fill="currentColor"/></svg>`;
+    bar.appendChild(sandwich);
   }
 
   function makeCard(item, isActive) {

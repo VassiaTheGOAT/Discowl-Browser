@@ -2351,7 +2351,7 @@ html[data-theme="light"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
   gap: 4px;
   background: var(--bg-base);
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 4px 6px;
   min-height: 38px;
 }
 .ct-preview-fixed { display: flex; align-items: center; flex: 1; }
@@ -2364,8 +2364,25 @@ html[data-theme="light"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
   border-radius: 6px;
   padding: 5px 12px;
   flex: 1;
+  min-width: 0;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.ct-preview-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: background .1s;
+}
+.ct-preview-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* Columns */
@@ -2572,56 +2589,60 @@ body.window-maximized .rz { display: none; }
 
 
 /* ══════════════════════════════════════════════════════════════
-   SNAP LAYOUTS POPUP
+   SNAP LAYOUTS POPUP — Windows 11 style
 ══════════════════════════════════════════════════════════════ */
 .snap-popup {
   position: fixed;
   z-index: 200000;
   background: var(--bg-modal);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.6);
-  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.04);
+  padding: 12px 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   animation: menuIn .12s cubic-bezier(.4,0,.2,1);
   -webkit-app-region: no-drag;
   user-select: none;
+  min-width: 236px;
 }
 
 .snap-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  padding: 0 2px;
+  color: var(--text-primary);
+  padding: 0 2px 2px;
 }
 
 .snap-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
+  gap: 6px;
 }
 
+/* Chaque miniature */
 .snap-item {
-  width: 56px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--bg-hover);
-  color: var(--text-muted);
+  border-radius: 5px;
+  overflow: hidden;
   cursor: pointer;
-  transition: background .1s, border-color .1s, color .1s;
-  padding: 0;
+  padding: 4px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-hover);
+  transition: border-color .1s;
+}
+.snap-item:hover {
+  border-color: var(--accent);
 }
 
-.snap-item:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+/* Zones SVG à l'intérieur de la miniature */
+.snap-item svg {
+  display: block;
+}
+.snap-item svg rect {
+  fill: var(--border-strong);
+  transition: fill .1s;
+}
+.snap-item svg rect.snap-zone-active {
+  fill: var(--accent);
 }

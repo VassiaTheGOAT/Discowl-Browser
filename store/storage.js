@@ -118,7 +118,17 @@ class Storage {
       blockAds:             false,
       doNotTrack:           true,
       saveCookies:          true,
+      blockThirdPartyCookies: false,
+      blockYoutubeAds:       false,
       customTitlebar:       false,
+      // Privacy
+      blockTrackers:        true,
+      httpsUpgrade:         true,
+      strictReferrer:       true,
+      blockWebRTC:          false,
+      clearOnExit:          false,
+      doh:                  true,
+      blockFingerprinting:  false,
       toolbarItems: [
         { id: 'back',       visible: true  },
         { id: 'forward',    visible: true  },
@@ -126,7 +136,8 @@ class Storage {
         { id: 'home',       visible: true  },
         { id: 'bookmarks',  visible: true  },
         { id: 'history',    visible: true  },
-        { id: 'downloads',  visible: true  }
+        { id: 'downloads',  visible: true  },
+        { id: 'zoom',       visible: true  }
       ]
     };
   }

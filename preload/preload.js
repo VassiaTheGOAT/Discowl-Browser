@@ -34,8 +34,9 @@ contextBridge.exposeInMainWorld('discowlAPI', {
 
   /* ── Paramètres ──────────────────────────────────────────── */
   settings: {
-    get:  ()     => ipcRenderer.invoke('settings:get'),
-    save: (data) => ipcRenderer.invoke('settings:save', data)
+    get:       ()     => ipcRenderer.invoke('settings:get'),
+    save:      (data) => ipcRenderer.invoke('settings:save', data),
+    getPublic: ()     => ipcRenderer.invoke('settings:getPublic')
   },
 
   /* ── Tor ─────────────────────────────────────────────────── */

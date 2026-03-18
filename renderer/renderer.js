@@ -489,60 +489,128 @@ function renderTabItem(tab) {
   // Middle click to close
   el.addEventListener('auxclick', (e) => { if (e.button === 1) closeTab(tab.id); });
 
-  // ── Drag & drop pour réordonner ──
-  el.draggable = true;
+  // ── Drag & drop custom (fluide, curseur normal) ──
+  // ── Drag Firefox-style : clone flottant + réordering en temps réel ──
+  el.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('button')) return;
 
-  el.addEventListener('dragstart', (e) => {
-    e.dataTransfer.setData('text/plain', tab.id);
-    e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => el.classList.add('tab-dragging'), 0);
-  });
+    const startX      = e.clientX;
+    const startY      = e.clientY;
+    const THRESHOLD   = 5;
+    let   dragging    = false;
+    let   ghost       = null;   // clone flottant
+    let   lastInsertPos = null; // dernière position d'insertion
 
-  el.addEventListener('dragend', () => {
-    el.classList.remove('tab-dragging');
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-drag-over'));
-  });
+    const getTabsOrder = () => {
+      const container = document.getElementById('tabs-container');
+      return [...container.querySelectorAll('.tab[data-tab-id]')];
+    };
 
-  el.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-drag-over'));
-    el.classList.add('tab-drag-over');
-  });
+    const startDrag = () => {
+      dragging = true;
+      document.body.style.userSelect  = 'none';
+      document.body.style.cursor      = 'grabbing';
 
-  el.addEventListener('dragleave', () => {
-    el.classList.remove('tab-drag-over');
-  });
+      // Créer le clone flottant
+      const rect  = el.getBoundingClientRect();
+      ghost       = el.cloneNode(true);
+      ghost.style.cssText = `
+        position: fixed;
+        z-index: 99999;
+        width: ${rect.width}px;
+        height: ${rect.height}px;
+        top: ${rect.top}px;
+        left: ${rect.left}px;
+        pointer-events: none;
+        opacity: .85;
+        box-shadow: 0 6px 24px rgba(0,0,0,.4);
+        border-radius: 7px 7px 0 0;
+        background: var(--bg-tab-active);
+        border: 1px solid var(--border-strong);
+        cursor: grabbing;
+        transition: box-shadow .1s;
+        will-change: transform;
+      `;
+      document.body.appendChild(ghost);
 
-  el.addEventListener('drop', (e) => {
-    e.preventDefault();
-    el.classList.remove('tab-drag-over');
-    const draggedId = parseInt(e.dataTransfer.getData('text/plain'), 10);
-    if (draggedId === tab.id) return;
+      // L'onglet original devient un placeholder transparent
+      el.style.opacity  = '0';
+      el.style.pointerEvents = 'none';
+    };
 
-    const container = document.getElementById('tabs-container');
-    const newTabBtn = document.getElementById('new-tab-btn');
-    const draggedEl = document.querySelector(`.tab[data-tab-id="${draggedId}"]`);
-    const targetEl  = el;
-    if (!draggedEl || !targetEl) return;
+    const findInsertTarget = (mouseX) => {
+      // Masquer le ghost temporairement pour elementFromPoint
+      if (ghost) ghost.style.display = 'none';
+      const els = getTabsOrder().filter(t => t !== el);
+      if (ghost) ghost.style.display = '';
 
-    // Réordonner dans le DOM
-    const allTabs = [...container.querySelectorAll('.tab[data-tab-id]')];
-    const dragIdx = allTabs.indexOf(draggedEl);
-    const dropIdx = allTabs.indexOf(targetEl);
-    if (dragIdx < dropIdx) {
-      container.insertBefore(draggedEl, targetEl.nextSibling || newTabBtn);
-    } else {
-      container.insertBefore(draggedEl, targetEl);
-    }
+      let best = null, bestDist = Infinity;
+      for (const t of els) {
+        const r   = t.getBoundingClientRect();
+        const mid = r.left + r.width / 2;
+        const d   = Math.abs(mouseX - mid);
+        if (d < bestDist) { bestDist = d; best = { el: t, before: mouseX < mid }; }
+      }
+      return best;
+    };
 
-    // Synchroniser le tableau tabs[]
-    const di = tabs.findIndex(t => t.id === draggedId);
-    const ti = tabs.findIndex(t => t.id === tab.id);
-    if (di !== -1 && ti !== -1) {
-      const [moved] = tabs.splice(di, 1);
-      tabs.splice(ti, 0, moved);
-    }
+    const onMove = (me) => {
+      if (!dragging) {
+        const dx = Math.abs(me.clientX - startX);
+        const dy = Math.abs(me.clientY - startY);
+        if (dx > THRESHOLD || dy > THRESHOLD) startDrag();
+        else return;
+      }
+
+      // Déplacer le clone
+      if (ghost) {
+        ghost.style.transform = `translate(${me.clientX - startX}px, ${me.clientY - startY}px)`;
+      }
+
+      // Réordonner en temps réel
+      const target = findInsertTarget(me.clientX);
+      if (!target) return;
+
+      const container = document.getElementById('tabs-container');
+      const newTabBtn = document.getElementById('new-tab-btn');
+      const key = target.el.dataset.tabId + (target.before ? 'b' : 'a');
+      if (key === lastInsertPos) return;
+      lastInsertPos = key;
+
+      if (target.before) {
+        container.insertBefore(el, target.el);
+      } else {
+        container.insertBefore(el, target.el.nextSibling || newTabBtn);
+      }
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+
+      // Supprimer le ghost
+      ghost?.remove();
+      ghost = null;
+
+      // Restaurer l'onglet
+      el.style.opacity       = '';
+      el.style.pointerEvents = '';
+      document.body.style.userSelect = '';
+      document.body.style.cursor     = '';
+
+      if (!dragging) return;
+      dragging = false;
+
+      // Synchroniser tabs[] avec l'ordre DOM final
+      const container = document.getElementById('tabs-container');
+      const domOrder = [...container.querySelectorAll('.tab[data-tab-id]')]
+        .map(t => parseInt(t.dataset.tabId, 10));
+      tabs.sort((a, b) => domOrder.indexOf(a.id) - domOrder.indexOf(b.id));
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
   });
 
   const container = document.getElementById('tabs-container');
@@ -766,13 +834,33 @@ function updateReloadBtn(isLoading) {
 }
 
 function updateZoomIndicator(tab) {
+  // URL bar mini indicator (existing)
   const btn = document.getElementById('zoom-indicator');
-  if (!btn) return;
-  if (!tab || tab.zoom === 1 || !tab.zoom) {
-    btn.classList.add('hidden');
-  } else {
-    btn.textContent = Math.round(tab.zoom * 100) + '%';
-    btn.classList.remove('hidden');
+  if (btn) {
+    if (!tab || tab.zoom === 1 || !tab.zoom) {
+      btn.classList.add('hidden');
+    } else {
+      btn.textContent = Math.round(tab.zoom * 100) + '%';
+      btn.classList.remove('hidden');
+    }
+  }
+
+  // Toolbar zoom control Firefox-style — toujours visible
+  const toolbarZoom = document.getElementById('toolbar-zoom');
+  const pctBtn      = document.getElementById('toolbar-zoom-pct');
+  if (toolbarZoom && pctBtn) {
+    const pct = Math.round((tab?.zoom ?? 1) * 100);
+    pctBtn.textContent = pct + '%';
+    // Toujours visible (comme Firefox)
+    toolbarZoom.classList.remove('hidden');
+    // Griser les boutons aux limites (zoom min/max)
+    const outBtn = document.getElementById('toolbar-zoom-out');
+    const inBtn  = document.getElementById('toolbar-zoom-in');
+    if (outBtn) outBtn.disabled = (tab?.zoom ?? 1) <= 0.3;
+    if (inBtn)  inBtn.disabled  = (tab?.zoom ?? 1) >= 3;
+    // Mettre en évidence si zoom != 100%
+    pctBtn.style.color = (pct !== 100) ? 'var(--accent)' : '';
+    pctBtn.style.fontWeight = (pct !== 100) ? '600' : '500';
   }
 }
 
@@ -943,6 +1031,11 @@ function setupToolbar() {
   document.getElementById('zoom-indicator')?.addEventListener('click', () => {
     zoomActive(0, true);
   });
+
+  // Toolbar zoom control
+  document.getElementById('toolbar-zoom-out')?.addEventListener('click', () => zoomActive(-0.1));
+  document.getElementById('toolbar-zoom-in')?.addEventListener('click',  () => zoomActive(0.1));
+  document.getElementById('toolbar-zoom-pct')?.addEventListener('click', () => zoomActive(0, true));
 
   /* ─── New tab buttons ───────────────────────────────────── */
   document.getElementById('new-tab-btn').addEventListener('click', () => {
@@ -1764,6 +1857,7 @@ const TOOLBAR_BUTTON_MAP = {
   bookmarks: () => document.getElementById('sidebar-left-toggle'),
   history:   () => document.getElementById('sidebar-right-toggle'),
   downloads: () => document.getElementById('downloads-btn')?.parentElement,
+  zoom:      () => document.getElementById('toolbar-zoom'),
 };
 
 // Séparer back des autres nav-buttons

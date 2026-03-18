@@ -6,6 +6,7 @@ const fs   = require('fs');
 const os   = require('os');
 
 const TorManager      = require('./torManager');
+const privacyManager  = require('./privacyManager');
 
 const passwordManager = require('./passwordManager');
 const vaultManager    = require('./vaultManager');
@@ -103,6 +104,10 @@ const USE_CUSTOM_TITLEBAR = !!earlySettings.customTitlebar;
 // Désactiver le GPU disk cache et le shader cache
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
+// WebRTC : éviter les fuites IP en mode normal
+// (renforcé en mode privé/Tor via privacyManager)
+app.commandLine.appendSwitch('enforce-webrtc-ip-permission-check');
+
 // Supprimer la menubar native — remplacée par menubar HTML custom
 Menu.setApplicationMenu(null);
 
@@ -127,6 +132,14 @@ app.whenReady().then(async () => {
   torManager = new TorManager();
 
   const settings = storage.getSettings();
+
+  // ── Protection vie privée ──────────────────────────────────
+  if (settings.torEnabled) {
+    privacyManager.setupTorSession(settings);
+  } else {
+    privacyManager.setupNormalSession(settings);
+  }
+  privacyManager.watchPrivateSessions();
 
   // Déverrouiller le vault selon le mode
   if (passwordManager.isEnabled()) {
@@ -227,6 +240,102 @@ function createWindow() {
     });
   });
 
+  // ── User-Agent & Client Hints ──────────────────────────────────
+  // Electron expose "Electron/X.Y.Z" dans le UA — Google le détecte
+  // et affiche une page de consentement RGPD non interactable.
+  // Solution : intercepter toutes les requêtes et forcer un UA Chrome
+  // sur TOUTES les sessions (persist:main + privées dynamiques).
+  {
+    const chromeVer  = process.versions.chrome || '120.0.0.0';
+    const chromeMaj  = chromeVer.split('.')[0];
+    const UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVer} Safari/537.36`;
+
+    function patchSession(sess) {
+      if (!sess) return;
+      sess.setUserAgent(UA);
+      // Remplacer aussi les Client Hints (Sec-CH-UA) que Google lit
+      sess.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
+        const h = details.requestHeaders;
+        h['User-Agent']         = UA;
+        h['Sec-CH-UA']          = `"Google Chrome";v="${chromeMaj}", "Chromium";v="${chromeMaj}", "Not_A Brand";v="24"`;
+        h['Sec-CH-UA-Mobile']   = '?0';
+        h['Sec-CH-UA-Platform'] = '"Windows"';
+        // Supprimer le header Electron s'il existe
+        delete h['X-Electron-Version'];
+        callback({ requestHeaders: h });
+      });
+    }
+
+    // Patcher la session principale + persist:main au démarrage
+    patchSession(session.defaultSession);
+    patchSession(session.fromPartition('persist:main'));
+
+    // Patcher automatiquement toutes les nouvelles sessions (onglets privés)
+    app.on('web-contents-created', (_, contents) => {
+      const sess = contents.session;
+      if (sess && sess !== session.defaultSession) {
+        patchSession(sess);
+        bypassGoogleConsent(sess);
+      }
+    });
+
+
+    // ── Google Consent bypass ──────────────────────────────────
+    // Google redirige les utilisateurs EU vers consent.google.com.
+    // On injecte le cookie de consentement pour éviter la page RGPD.
+    function bypassGoogleConsent(sess) {
+      if (!sess) return;
+
+      // Intercepter les redirections vers consent.google.com
+      sess.webRequest.onBeforeRequest(
+        { urls: ['https://consent.google.com/*', 'https://www.google.com/sorry/*'] },
+        (details, callback) => {
+          // Extraire l'URL de retour depuis les paramètres
+          try {
+            const url   = new URL(details.url);
+            const cont  = url.searchParams.get('continue') || url.searchParams.get('q');
+            if (cont) {
+              callback({ redirectURL: decodeURIComponent(cont) });
+              return;
+            }
+          } catch {}
+          callback({});
+        }
+      );
+
+      // Injecter les cookies de consentement Google sur chaque domaine google.*
+      const googleCookies = [
+        { name: 'CONSENT',    value: 'YES+cb.20210720-07-p0.fr+FX+' + Math.floor(Date.now()/1000), domain: '.google.com' },
+        { name: 'SOCS',       value: 'CAESEwgDEgk0ODE5Nzk2NzIaAmZyIAEaBgiA_LyaBg', domain: '.google.com' },
+      ];
+
+      googleCookies.forEach(ck => {
+        sess.cookies.set({
+          url:      'https://www.google.com',
+          name:     ck.name,
+          value:    ck.value,
+          domain:   ck.domain,
+          path:     '/',
+          secure:   true,
+          httpOnly: false,
+          expirationDate: Math.floor(Date.now()/1000) + 60*60*24*365*2
+        }).catch(() => {});
+      });
+    }
+
+    bypassGoogleConsent(session.defaultSession);
+    bypassGoogleConsent(session.fromPartition('persist:main'));
+
+    // Appliquer aussi aux nouvelles sessions (onglets privés)
+    const _origPatch = patchSession;
+    function patchSessionFull(sess) {
+      _origPatch(sess);
+      bypassGoogleConsent(sess);
+    }
+
+    console.log('[UA] Chrome UA actif :', UA.slice(0, 80));
+  }
+
   // ── Interception des téléchargements ────────────────────────
   // Les webviews utilisent fromPartition('persist:main') — PAS defaultSession
   const mainSession = session.fromPartition('persist:main');
@@ -326,6 +435,7 @@ ipcMain.handle('history:search', (_, q)     => {
    IPC — Paramètres
 ══════════════════════════════════════════════════════════════ */
 ipcMain.handle('settings:get', () => storage.getSettings());
+ipcMain.handle('settings:getPublic', () => ({ blockYoutubeAds: !!storage.getSettings().blockYoutubeAds, blockAds: !!storage.getSettings().blockAds }));
 
 ipcMain.handle('settings:save', async (_, newSettings) => {
   if (!newSettings || typeof newSettings !== 'object' || Array.isArray(newSettings)) return false;
@@ -333,7 +443,7 @@ ipcMain.handle('settings:save', async (_, newSettings) => {
   const ALLOWED_KEYS = new Set([
     'defaultEngine','theme','torEnabled','homePage','newTabPage',
     'downloadPath','language','fontSize','showBookmarksToolbar',
-    'blockAds','doNotTrack','saveCookies','toolbarItems','customTitlebar'
+    'blockAds','doNotTrack','saveCookies','blockThirdPartyCookies','blockYoutubeAds','toolbarItems','customTitlebar'
   ]);
   const safe = {};
   for (const [k, v] of Object.entries(newSettings)) {
@@ -356,7 +466,6 @@ ipcMain.handle('tor:status', () => ({
   running:   torManager.isTorRunning(),
   proxyUrl:  torManager.getTorProxyUrl(),
   binExists: fs.existsSync(torManager.torBinPath),
-  binPath:   torManager.torBinPath,
   // Indique si le proxy Chromium est actif (= commandLine switch présent)
   proxyActive: !!earlySettings.torEnabled
 }));
@@ -434,12 +543,49 @@ ipcMain.handle('dialog:openDirectory', async () => {
 });
 
 
+
+/* ══════════════════════════════════════════════════════════════
+   RATE LIMITING — protection brute-force
+   Max 5 tentatives, puis délai exponentiel
+══════════════════════════════════════════════════════════════ */
+const _rateLimits = new Map(); // key → { count, lockedUntil }
+
+function rateCheck(key) {
+  const now = Date.now();
+  const s   = _rateLimits.get(key) || { count: 0, lockedUntil: 0 };
+  if (now < s.lockedUntil) {
+    const wait = Math.ceil((s.lockedUntil - now) / 1000);
+    return { allowed: false, wait };
+  }
+  return { allowed: true };
+}
+
+function rateRecord(key, success) {
+  const s = _rateLimits.get(key) || { count: 0, lockedUntil: 0 };
+  if (success) {
+    _rateLimits.delete(key);
+    return;
+  }
+  s.count++;
+  // Délai exponentiel : 5 échecs → 30s, 8 → 5min, 10 → 15min
+  if (s.count >= 10) s.lockedUntil = Date.now() + 15 * 60 * 1000;
+  else if (s.count >= 8) s.lockedUntil = Date.now() + 5 * 60 * 1000;
+  else if (s.count >= 5) s.lockedUntil = Date.now() + 30 * 1000;
+  _rateLimits.set(key, s);
+}
+
 /* ══════════════════════════════════════════════════════════════
    PASSWORD IPC
 ══════════════════════════════════════════════════════════════ */
 ipcMain.handle('password:isEnabled', ()           => passwordManager.isEnabled());
 ipcMain.handle('password:setup',     (_, pwd)     => passwordManager.setup(pwd));
-ipcMain.handle('password:verify',    (_, pwd)     => passwordManager.verify(pwd));
+ipcMain.handle('password:verify', async (_, pwd) => {
+  const rl = rateCheck('password:verify');
+  if (!rl.allowed) return { ok: false, rateLimited: true, wait: rl.wait };
+  const ok = await passwordManager.verify(pwd);
+  rateRecord('password:verify', ok);
+  return ok;
+});
 ipcMain.handle('password:disable',   (_, pwd)     => passwordManager.disable(pwd));
 
 /* ══════════════════════════════════════════════════════════════
@@ -472,7 +618,13 @@ ipcMain.handle('window:customTitlebar', () => USE_CUSTOM_TITLEBAR);
    VAULT IPC
 ══════════════════════════════════════════════════════════════ */
 // Appelé après vérification du mot de passe maître (lock screen)
-ipcMain.handle('vault:unlock',      async (_, pwd)  => vaultManager.unlock(pwd));
+ipcMain.handle('vault:unlock', async (_, pwd) => {
+  const rl = rateCheck('vault:unlock');
+  if (!rl.allowed) return false;
+  const ok = await vaultManager.unlock(pwd);
+  rateRecord('vault:unlock', ok);
+  return ok;
+});
 ipcMain.handle('vault:isUnlocked',  ()              => vaultManager.isUnlocked());
 ipcMain.handle('vault:save', (_, host, username, password) => {
   if (typeof host     !== 'string' || host.length     > 253)   return { ok: false, error: 'Invalid host' };
@@ -494,5 +646,11 @@ ipcMain.handle('vault:delete', (_, id) => {
   if (typeof id !== 'string' || id.length > 64) return { ok: false };
   return vaultManager.delete(id);
 });
-// Appelé quand le mot de passe maître est désactivé
-ipcMain.handle('vault:removeProtection', ()         => { vaultManager.removePasswordProtection(); return { ok: true }; });
+// Appelé quand le mot de passe maître est désactivé — requiert le mot de passe
+ipcMain.handle('vault:removeProtection', async (_, pwd) => {
+  if (typeof pwd !== 'string' || !pwd) return { ok: false, error: 'Password required' };
+  const valid = await passwordManager.verify(pwd);
+  if (!valid) return { ok: false, error: 'Incorrect password' };
+  vaultManager.removePasswordProtection();
+  return { ok: true };
+});

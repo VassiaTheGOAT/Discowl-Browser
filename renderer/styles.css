@@ -843,17 +843,12 @@ webview.active { display: flex; }
 
 
 
-/* ── Drag & drop tabs ──────────────────────────────────────── */
-.tab[draggable="true"] { cursor: grab; }
-.tab[draggable="true"]:active { cursor: grabbing; }
+/* ── Drag & drop tabs Firefox-style ──────────────────────────── */
+.tab { cursor: default; transition: transform .12s ease, opacity .12s ease; }
 
-.tab.tab-dragging {
-  opacity: 0.4;
-}
-
-.tab.tab-drag-over {
-  box-shadow: inset 2px 0 0 var(--accent);
-  background: var(--bg-hover);
+/* Les onglets bougent doucement quand le clone passe au-dessus */
+.tab.tab-shifting {
+  transition: transform .15s cubic-bezier(.25,.1,.25,1);
 }
 /* Speed dial */
 .speed-dial {
@@ -2646,3 +2641,68 @@ body.window-maximized .rz { display: none; }
 .snap-item svg rect.snap-zone-active {
   fill: var(--accent);
 }
+
+/* ── Toolbar zoom control Firefox-style ─────────────────────── */
+.toolbar-zoom {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.toolbar-zoom.hidden { display: none !important; }
+
+.zoom-ctrl-btn {
+  width: 26px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+}
+.zoom-ctrl-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.zoom-ctrl-btn:active { background: var(--border); }
+
+.zoom-ctrl-pct {
+  min-width: 42px;
+  height: 100%;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border-strong);
+  border-right: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: background .12s;
+  flex-shrink: 0;
+}
+.zoom-ctrl-pct:hover { background: var(--bg-hover); }
+
+/* ── Privacy level indicator ────────────────────────────────── */
+.privacy-level-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.privacy-level-icon { font-size: 24px; flex-shrink: 0; }
+.privacy-level-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.privacy-level-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }

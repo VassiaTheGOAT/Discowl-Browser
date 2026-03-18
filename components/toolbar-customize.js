@@ -52,6 +52,12 @@ const ToolbarCustomizer = (() => {
       title: 'Downloads (Ctrl+J)',
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M9 2v9M5 8l4 4 4-4M2 15h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
     },
+    {
+      id: 'zoom',
+      label: 'Zoom control',
+      title: 'Zoom −/+/% (like Firefox)',
+      svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><rect x="1" y="5" width="16" height="8" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 9h2M9 7v4M13 9h2M9 9h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`
+    },
   ];
 
   /* ── État ────────────────────────────────────────────────── */
@@ -136,7 +142,7 @@ const ToolbarCustomizer = (() => {
     bar.appendChild(urlBar);
 
     // Boutons droite (bookmarks/history/downloads)
-    const RIGHT_IDS = ['bookmarks','history','downloads'];
+    const RIGHT_IDS = ['bookmarks','history','downloads','zoom'];
     const rightBtns = active.filter(i => RIGHT_IDS.includes(i.id));
     if (rightBtns.length) {
       const rightGroup = document.createElement('div');
@@ -144,11 +150,19 @@ const ToolbarCustomizer = (() => {
       rightBtns.forEach(item => {
         const def = getDef(item.id);
         if (!def) return;
-        const btn = document.createElement('div');
-        btn.className = 'ct-preview-btn';
-        btn.title = def.label;
-        btn.innerHTML = def.svg;
-        rightGroup.appendChild(btn);
+        if (item.id === 'zoom') {
+          // Rendu spécial pour le contrôle zoom
+          const wrap = document.createElement('div');
+          wrap.style.cssText = 'display:flex;align-items:center;height:22px;border:1px solid var(--border-strong);border-radius:4px;overflow:hidden;font-size:10px';
+          wrap.innerHTML = `<div style="width:18px;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);border-right:1px solid var(--border-strong)">−</div><div style="padding:0 5px;color:var(--text-primary);font-weight:500;height:100%;display:flex;align-items:center">100%</div><div style="width:18px;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);border-left:1px solid var(--border-strong)">+</div>`;
+          rightGroup.appendChild(wrap);
+        } else {
+          const btn = document.createElement('div');
+          btn.className = 'ct-preview-btn';
+          btn.title = def.label;
+          btn.innerHTML = def.svg;
+          rightGroup.appendChild(btn);
+        }
       });
       bar.appendChild(rightGroup);
     }
@@ -317,6 +331,7 @@ const ToolbarCustomizer = (() => {
       { id: 'bookmarks', visible: true },
       { id: 'history',   visible: true },
       { id: 'downloads', visible: true },
+      { id: 'zoom',      visible: true },
     ];
     renderPage();
   }

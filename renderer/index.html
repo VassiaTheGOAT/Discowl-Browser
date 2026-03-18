@@ -339,6 +339,17 @@
           <div class="dl-list"></div>
         </div>
       </div>
+      <!-- Zoom control Firefox-style — masqué si zoom = 100% -->
+      <div id="toolbar-zoom" class="toolbar-zoom hidden">
+        <button id="toolbar-zoom-out" class="zoom-ctrl-btn" title="Zoom out (Ctrl+−)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button id="toolbar-zoom-pct" class="zoom-ctrl-pct" title="Reset zoom (Ctrl+0)">100%</button>
+        <button id="toolbar-zoom-in"  class="zoom-ctrl-btn" title="Zoom in (Ctrl+=)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
       <!-- Sandwich / hamburger menu -->
       <button id="sandwich-btn" class="action-btn" title="Menu" aria-expanded="false" aria-haspopup="true">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="4"  r="1.4" fill="currentColor"/><circle cx="9" cy="9"  r="1.4" fill="currentColor"/><circle cx="9" cy="14" r="1.4" fill="currentColor"/></svg>

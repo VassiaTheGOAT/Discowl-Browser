@@ -261,7 +261,7 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.2.3';
+      if (vEl) vEl.textContent = v || '1.2.4';
     }).catch(() => {});
 
     sec.appendChild(makeGroup('Application', [
@@ -391,13 +391,82 @@ const SettingsManager = (() => {
     if (!sec) return;
     sec.innerHTML = '';
 
-    sec.appendChild(makeGroup('Tracking & cookies', [
-      makeRow('Do Not Track (DNT)', 'Sends the DNT header to websites',
+    // ── Protection level indicator ──
+    const level = document.createElement('div');
+    level.className = 'privacy-level-bar';
+    const isPrivate = !!_settings.torEnabled;
+    const lvl = isPrivate ? 'tor' : (_settings.blockAds ? 'enhanced' : 'standard');
+    const lvlLabels = { standard: ['🔵', 'Standard', 'Basic privacy headers (DNT, Sec-GPC).'], enhanced: ['🟢', 'Enhanced', 'Standard + tracker blocking + WebRTC limited.'], tor: ['🟣', 'Maximum (Tor)', 'All trackers blocked, WebRTC disabled, DNS via Tor proxy.'] };
+    const [icon, name, desc] = lvlLabels[lvl];
+    level.innerHTML = `<div class="privacy-level-icon">${icon}</div><div><div class="privacy-level-name">${icon} ${name} protection</div><div class="privacy-level-desc">${desc}</div></div>`;
+    sec.appendChild(level);
+
+    sec.appendChild(makeGroup('Tracking protection', [
+      makeRow('Do Not Track (DNT)', 'Sends DNT + Sec-GPC headers — all modes',
         makeToggle('toggle-dnt', _settings.doNotTrack, v => save({ doNotTrack: v }))
       ),
-      makeRow('Keep cookies', 'Disabling clears cookies between sessions',
-        makeToggle('toggle-cookies', _settings.saveCookies, v => save({ saveCookies: v }))
-      )
+      makeRow('Block trackers & ads', 'Blocks known tracking domains in all tabs. Enhanced mode.',
+        makeToggle('toggle-blockads', _settings.blockAds, v => {
+          save({ blockAds: v });
+          showToast('Restart to apply tracker blocking changes', 'info');
+        })
+      ),
+      makeRow(
+        (() => { const s = document.createElement('span'); s.style.cssText='display:flex;align-items:center;gap:8px'; s.innerHTML='Block video ads <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(230,108,44,.18);color:var(--accent)">YouTube · Twitch · Dailymotion</span>'; return s; })(),
+        'Skips and removes ads on video platforms. No extension needed.',
+        makeToggle('toggle-yt-ads', !!_settings.blockYoutubeAds, v => {
+          save({ blockYoutubeAds: v });
+          showToast(v ? 'Video ad blocker enabled ✓' : 'Video ad blocker disabled', v ? 'success' : 'info');
+        })
+      ),
+      makeRow('Block third-party cookies', 'Always active in private tabs. Enable for all tabs.',
+        makeToggle('toggle-3p-cookies', !!_settings.blockThirdPartyCookies, v => {
+          save({ blockThirdPartyCookies: v });
+          showToast('Restart to apply', 'info');
+        })
+      ),
+    ]));
+
+    sec.appendChild(makeGroup('Private tabs', [
+      makeRow('Tracker blocking', 'Always enabled in private tabs — cannot be disabled', (() => {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,.15);color:#22c55e;font-weight:500';
+        badge.textContent = 'Always ON';
+        return badge;
+      })()),
+      makeRow('WebRTC IP protection', 'Restricts WebRTC to prevent IP leaks in private mode', (() => {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,.15);color:#22c55e;font-weight:500';
+        badge.textContent = 'Always ON';
+        return badge;
+      })()),
+      makeRow('Third-party cookies', 'Blocked in all private tabs', (() => {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,.15);color:#22c55e;font-weight:500';
+        badge.textContent = 'Always BLOCKED';
+        return badge;
+      })()),
+    ]));
+
+    sec.appendChild(makeGroup('Tor mode — Maximum privacy', [
+      makeRow('WebRTC', 'Completely disabled — no IP leak possible', (() => {
+        const badge = document.createElement('span');
+        badge.style.cssText = `font-size:11px;padding:2px 8px;border-radius:4px;background:${_settings.torEnabled ? 'rgba(34,197,94,.15)' : 'rgba(100,100,100,.15)'};color:${_settings.torEnabled ? '#22c55e' : 'var(--text-muted)'};font-weight:500`;
+        badge.textContent = _settings.torEnabled ? 'DISABLED ✓' : 'Requires Tor';
+        return badge;
+      })()),
+      makeRow('Geolocation', 'Blocked — cannot reveal real location', (() => {
+        const badge = document.createElement('span');
+        badge.style.cssText = `font-size:11px;padding:2px 8px;border-radius:4px;background:${_settings.torEnabled ? 'rgba(34,197,94,.15)' : 'rgba(100,100,100,.15)'};color:${_settings.torEnabled ? '#22c55e' : 'var(--text-muted)'};font-weight:500`;
+        badge.textContent = _settings.torEnabled ? 'BLOCKED ✓' : 'Requires Tor';
+        return badge;
+      })()),
+      makeRow('Referrer header', 'Completely removed — no origin leaks', (() => {
+        const badge = document.createElement('span');
+        badge.style.cssText = `font-size:11px;padding:2px 8px;border-radius:4px;background:${_settings.torEnabled ? 'rgba(34,197,94,.15)' : 'rgba(100,100,100,.15)'};color:${_settings.torEnabled ? '#22c55e' : 'var(--text-muted)'};font-weight:500`;
+        badge.textContent = _settings.torEnabled ? 'REMOVED ✓' : 'Requires Tor';
+        return badge;
+      })()),
     ]));
 
     sec.appendChild(makeGroup('Browsing data', [

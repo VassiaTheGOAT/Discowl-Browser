@@ -26,7 +26,7 @@ const SettingsManager = (() => {
   async function save(updates) {
     _settings = { ..._settings, ...updates };
     await window.discowlAPI.settings.save(_settings);
-    showToast('Settings saved', 'success');
+    showToast(i18n.t('settings.saved'), 'success');
     // Notify renderer of setting change
     if (window.DiscowlBrowser) window.DiscowlBrowser.onSettingsChanged(_settings);
   }
@@ -40,6 +40,8 @@ const SettingsManager = (() => {
     buildNetwork();
     buildTor();
     buildSecurity();
+    // Re-appliquer les traductions sur le contenu reconstruit
+    if (window.i18n) window.i18n.apply();
   }
 
   /* ── Toggle helper ─────────────────────────────────────────── */
@@ -209,9 +211,9 @@ const SettingsManager = (() => {
 
     const homeInput = makeInput('https://...', _settings.homePage, v => save({ homePage: v }));
 
-    sec.appendChild(makeGroup('Navigation', [
-      makeRow("Home page", 'Loaded on startup and with the Home button', homeInput),
-      makeRow("Show bookmarks bar", "Always visible below the navigation bar",
+    sec.appendChild(makeGroup(i18n.t('settings.navigation'), [
+      makeRow(i18n.t('settings.home_page'), i18n.t('settings.home_page_desc'), homeInput),
+      makeRow(i18n.t('settings.show_bm_bar'), i18n.t('settings.show_bm_bar_desc'),
         makeToggle('toggle-bm-toolbar', _settings.showBookmarksToolbar, v => {
           save({ showBookmarksToolbar: v });
           document.getElementById('bookmarks-toolbar').style.display = v ? 'flex' : 'none';
@@ -240,20 +242,20 @@ const SettingsManager = (() => {
       return wrap;
     };
 
-    pathContainer.appendChild(makePathLine('Data folder', dataPath.folder));
+    pathContainer.appendChild(makePathLine(i18n.t('settings.data_folder'), dataPath.folder));
     pathContainer.appendChild(makePathLine('Bookmarks (favorites.json)', dataPath.favorites));
     pathContainer.appendChild(makePathLine('History (history.json)', dataPath.history));
     pathContainer.appendChild(makePathLine('Settings (settings.json)', dataPath.settings));
 
-    const openBtn = makeButton('📂 Open folder', 'settings-btn-secondary', () => {
+    const openBtn = makeButton(i18n.t('settings.open_folder'), 'settings-btn-secondary', () => {
       window.discowlAPI.shell.openPath(dataPath.folder);
     });
     openBtn.style.marginTop = '6px';
     openBtn.style.alignSelf = 'flex-start';
     pathContainer.appendChild(openBtn);
 
-    const dataGroup = makeGroup('Persistent data (AppData)', [
-      makeRow('Location', 'Your bookmarks, history and settings are saved here', null)
+    const dataGroup = makeGroup(i18n.t('settings.app_data'), [
+      makeRow(i18n.t('settings.location'), i18n.t('settings.location_desc'), null)
     ]);
     dataGroup.appendChild(pathContainer);
     sec.appendChild(dataGroup);
@@ -261,35 +263,35 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.2.4';
+      if (vEl) vEl.textContent = v || '1.2.5';
     }).catch(() => {});
 
-    sec.appendChild(makeGroup('Application', [
-      makeRow('Version', null, (() => {
+    sec.appendChild(makeGroup(i18n.t('settings.application'), [
+      makeRow(i18n.t('settings.version'), null, (() => {
         const span = document.createElement('span');
         span.id = 'settings-version-label';
         span.style.cssText = 'color:var(--text-muted);font-size:12px;font-family:var(--font-mono)';
         span.textContent = '…';
         return span;
       })()),
-      makeRow('Updates', 'Check for a newer version of Discowl',
-        makeButton('Check now', 'settings-btn-secondary', async () => {
-          showToast('Checking for updates…', 'info');
+      makeRow(i18n.t('settings.updates'), i18n.t('settings.updates_desc'),
+        makeButton(i18n.t('settings.check_now'), 'settings-btn-secondary', async () => {
+          showToast(i18n.t('toast.update_check'), 'info');
           try {
             const result = await window.discowlAPI.updates.check();
             if (result.upToDate) {
-              showToast('Already up to date ✓', 'success');
+              showToast(i18n.t('settings.up_to_date'), 'success');
             } else {
               showToast(`Update ${result.latest} available — restart the app to install`, 'info');
             }
           } catch (e) {
-            showToast('Could not check for updates', 'error');
+            showToast(i18n.t('settings.update_error'), 'error');
           }
         })
       ),
-      makeRow("Clear cache", "Frees up disk space",
-        makeButton('Clear', 'settings-btn-secondary', () => {
-          showToast("Restart the app to clear the cache", 'info');
+      makeRow(i18n.t('settings.clear_cache'), i18n.t('settings.clear_cache_desc'),
+        makeButton(i18n.t('settings.clear_btn'), 'settings-btn-secondary', () => {
+          showToast(i18n.t('settings.clear_restart'), 'info');
         })
       )
     ]));
@@ -302,9 +304,9 @@ const SettingsManager = (() => {
     if (!sec) return;
     sec.innerHTML = '';
 
-    sec.appendChild(makeGroup('Theme', [
-      makeRow('Interface theme', 'Applied instantly to the entire browser',
-        makeSelect({ dark: 'Dark', light: 'Light' }, _settings.theme, v => {
+    sec.appendChild(makeGroup(i18n.t('settings.theme'), [
+      makeRow(i18n.t('settings.interface_theme'), i18n.t('settings.interface_theme_desc'),
+        makeSelect({ dark: i18n.t('settings.dark'), light: i18n.t('settings.light') }, _settings.theme, v => {
           save({ theme: v });
           // Appliquer immediatement via le renderer
           if (window.DiscowlBrowser?.setTheme) {
@@ -316,12 +318,30 @@ const SettingsManager = (() => {
       )
     ]));
 
-    sec.appendChild(makeGroup('Text', [
-      makeRow('Base font size', 'Affects web pages',
+    sec.appendChild(makeGroup(i18n.t('settings.text'), [
+      makeRow(i18n.t('settings.font_size'), i18n.t('settings.font_size_desc'),
         makeSelect({ '12': '12px', '14': '14px', '16': '16px', '18': '18px', '20': '20px' },
           String(_settings.fontSize),
           v => save({ fontSize: parseInt(v) })
         )
+      )
+    ]));
+
+    const LANG_NAMES = { en: '🇬🇧 English', fr: '🇫🇷 Français', es: '🇪🇸 Español', de: '🇩🇪 Deutsch', it: '🇮🇹 Italiano' };
+    sec.appendChild(makeGroup(i18n.t('settings.language'), [
+      makeRow(i18n.t('settings.interface_language'), i18n.t('settings.interface_language_desc'),
+        makeSelect(LANG_NAMES, _settings.language || 'en', v => {
+          save({ language: v });
+          if (window.i18n) {
+            window.i18n.setLang(v);
+            window.i18n.apply();
+          }
+          // Rebuild settings UI in new language
+          buildAllSections();
+          // Show active section again
+          const activeBtn = document.querySelector('.settings-nav-item.active');
+          if (activeBtn) activeBtn.click();
+        })
       )
     ]));
 
@@ -330,18 +350,18 @@ const SettingsManager = (() => {
 
     const titlebarLabel = document.createElement('span');
     titlebarLabel.style.cssText = 'display:flex;align-items:center;gap:8px';
-    titlebarLabel.innerHTML = 'Custom titlebar <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(230,108,44,.18);color:var(--accent);letter-spacing:.04em">BETA</span>';
+    titlebarLabel.innerHTML = i18n.t('settings.custom_titlebar') + ' <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(230,108,44,.18);color:var(--accent);letter-spacing:.04em">BETA</span>';
 
     titlebarGroup.appendChild(makeRow(
       titlebarLabel,
-      'Hides the native window frame and integrates the −/□/× buttons directly into the menubar.',
+      i18n.t('settings.custom_titlebar_desc'),
       makeToggle('toggle-custom-titlebar', !!_settings.customTitlebar, async v => {
         await save({ customTitlebar: v });
         titlebarRestartBtn.style.display = 'block';
       })
     ));
 
-    const titlebarRestartBtn = makeButton('↺ Restart to apply', 'settings-btn-primary', () => {
+    const titlebarRestartBtn = makeButton(i18n.t('settings.restart_apply'), 'settings-btn-primary', () => {
       window.discowlAPI.app.relaunch();
     });
     titlebarRestartBtn.style.cssText += ';margin:14px 20px 16px;display:none';
@@ -352,7 +372,7 @@ const SettingsManager = (() => {
     windowGroup.className = 'settings-group-wrapper';
     const windowHeader = document.createElement('div');
     windowHeader.className = 'settings-group-title';
-    windowHeader.textContent = 'Window';
+    windowHeader.textContent = i18n.t('settings.window');
     sec.appendChild(windowHeader);
     sec.appendChild(titlebarGroup);
   }
@@ -363,8 +383,8 @@ const SettingsManager = (() => {
     if (!sec) return;
     sec.innerHTML = '';
 
-    sec.appendChild(makeGroup('Default search engine', [
-      makeRow('Default engine', 'Used when searching from the address bar',
+    sec.appendChild(makeGroup(i18n.t('settings.default_engine'), [
+      makeRow(i18n.t('settings.default_engine'), i18n.t('settings.default_engine_desc'),
         makeEngineSelect(_settings.defaultEngine, v => {
           save({ defaultEngine: v });
           if (window.DiscowlBrowser) window.DiscowlBrowser.setEngine(v);
@@ -372,14 +392,14 @@ const SettingsManager = (() => {
       )
     ]));
 
-    sec.appendChild(makeGroup('Available engines', [
+    sec.appendChild(makeGroup(i18n.t('settings.available_engines'), [
       ...Object.entries(ENGINES).map(([k, v]) => {
         const labelEl = document.createElement('span');
         labelEl.style.cssText = 'display:flex;align-items:center;gap:8px;';
         labelEl.innerHTML = `<img src="${v.favicon}" width="16" height="16" style="display:block;object-fit:contain"/><span>${v.name}</span>`;
         const badge = document.createElement('span');
         badge.style.cssText = 'font-size:11px;padding:2px 7px;border-radius:4px;background:var(--bg-input);color:var(--text-muted)';
-        badge.textContent = k === _settings.defaultEngine ? '✓ default' : '';
+        badge.textContent = k === _settings.defaultEngine ? i18n.t('settings.default_mark') : '';
         return makeRow(labelEl, null, badge);
       })
     ]));
@@ -396,85 +416,85 @@ const SettingsManager = (() => {
     level.className = 'privacy-level-bar';
     const isPrivate = !!_settings.torEnabled;
     const lvl = isPrivate ? 'tor' : (_settings.blockAds ? 'enhanced' : 'standard');
-    const lvlLabels = { standard: ['🔵', 'Standard', 'Basic privacy headers (DNT, Sec-GPC).'], enhanced: ['🟢', 'Enhanced', 'Standard + tracker blocking + WebRTC limited.'], tor: ['🟣', 'Maximum (Tor)', 'All trackers blocked, WebRTC disabled, DNS via Tor proxy.'] };
+    const lvlLabels = { standard: ['🔵', i18n.t('settings.privacy_standard'), i18n.t('settings.privacy_standard_desc')], enhanced: ['🟢', i18n.t('settings.privacy_enhanced'), i18n.t('settings.privacy_enhanced_desc')], tor: ['🟣', i18n.t('settings.privacy_max'), i18n.t('settings.privacy_max_desc')] };
     const [icon, name, desc] = lvlLabels[lvl];
     level.innerHTML = `<div class="privacy-level-icon">${icon}</div><div><div class="privacy-level-name">${icon} ${name} protection</div><div class="privacy-level-desc">${desc}</div></div>`;
     sec.appendChild(level);
 
-    sec.appendChild(makeGroup('Tracking protection', [
-      makeRow('Do Not Track (DNT)', 'Sends DNT + Sec-GPC headers — all modes',
+    sec.appendChild(makeGroup(i18n.t('settings.tracking'), [
+      makeRow(i18n.t('settings.dnt'), i18n.t('settings.dnt_desc'),
         makeToggle('toggle-dnt', _settings.doNotTrack, v => save({ doNotTrack: v }))
       ),
-      makeRow('Block trackers & ads', 'Blocks known tracking domains in all tabs. Enhanced mode.',
+      makeRow(i18n.t('settings.block_ads'), i18n.t('settings.block_ads_desc'),
         makeToggle('toggle-blockads', _settings.blockAds, v => {
           save({ blockAds: v });
-          showToast('Restart to apply tracker blocking changes', 'info');
+          showToast(i18n.t('toast.restart_tracker'), 'info');
         })
       ),
       makeRow(
-        (() => { const s = document.createElement('span'); s.style.cssText='display:flex;align-items:center;gap:8px'; s.innerHTML='Block video ads <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(230,108,44,.18);color:var(--accent)">YouTube · Twitch · Dailymotion</span>'; return s; })(),
-        'Skips and removes ads on video platforms. No extension needed.',
+        (() => { const s = document.createElement('span'); s.style.cssText='display:flex;align-items:center;gap:8px'; s.innerHTML=i18n.t('settings.block_video_ads') + ' <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(230,108,44,.18);color:var(--accent)">YouTube · Twitch · Dailymotion</span>'; return s; })(),
+        i18n.t('settings.block_video_ads_desc'),
         makeToggle('toggle-yt-ads', !!_settings.blockYoutubeAds, v => {
           save({ blockYoutubeAds: v });
-          showToast(v ? 'Video ad blocker enabled ✓' : 'Video ad blocker disabled', v ? 'success' : 'info');
+          showToast(v ? i18n.t('toast.yt_ads_on') : i18n.t('toast.yt_ads_off'), v ? 'success' : 'info');
         })
       ),
-      makeRow('Block third-party cookies', 'Always active in private tabs. Enable for all tabs.',
+      makeRow(i18n.t('settings.block_3p'), i18n.t('settings.block_3p_desc'),
         makeToggle('toggle-3p-cookies', !!_settings.blockThirdPartyCookies, v => {
           save({ blockThirdPartyCookies: v });
-          showToast('Restart to apply', 'info');
+          showToast(i18n.t('toast.restart_apply'), 'info');
         })
       ),
     ]));
 
-    sec.appendChild(makeGroup('Private tabs', [
-      makeRow('Tracker blocking', 'Always enabled in private tabs — cannot be disabled', (() => {
+    sec.appendChild(makeGroup(i18n.t('settings.private_tabs'), [
+      makeRow(i18n.t('settings.tracker_block'), i18n.t('settings.tracker_block_desc'), (() => {
         const badge = document.createElement('span');
         badge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,.15);color:#22c55e;font-weight:500';
-        badge.textContent = 'Always ON';
+        badge.textContent = i18n.t('settings.always_on');
         return badge;
       })()),
-      makeRow('WebRTC IP protection', 'Restricts WebRTC to prevent IP leaks in private mode', (() => {
+      makeRow(i18n.t('settings.webrtc_protect'), i18n.t('settings.webrtc_protect_desc'), (() => {
         const badge = document.createElement('span');
         badge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,.15);color:#22c55e;font-weight:500';
-        badge.textContent = 'Always ON';
+        badge.textContent = i18n.t('settings.always_on');
         return badge;
       })()),
-      makeRow('Third-party cookies', 'Blocked in all private tabs', (() => {
+      makeRow(i18n.t('settings.3p_cookies'), i18n.t('settings.3p_cookies_desc'), (() => {
         const badge = document.createElement('span');
         badge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,.15);color:#22c55e;font-weight:500';
-        badge.textContent = 'Always BLOCKED';
+        badge.textContent = i18n.t('settings.always_blocked');
         return badge;
       })()),
     ]));
 
-    sec.appendChild(makeGroup('Tor mode — Maximum privacy', [
-      makeRow('WebRTC', 'Completely disabled — no IP leak possible', (() => {
+    sec.appendChild(makeGroup(i18n.t('settings.tor_section'), [
+      makeRow(i18n.t('settings.webrtc'), i18n.t('settings.webrtc_desc'), (() => {
         const badge = document.createElement('span');
         badge.style.cssText = `font-size:11px;padding:2px 8px;border-radius:4px;background:${_settings.torEnabled ? 'rgba(34,197,94,.15)' : 'rgba(100,100,100,.15)'};color:${_settings.torEnabled ? '#22c55e' : 'var(--text-muted)'};font-weight:500`;
-        badge.textContent = _settings.torEnabled ? 'DISABLED ✓' : 'Requires Tor';
+        badge.textContent = _settings.torEnabled ? i18n.t('settings.disabled') : i18n.t('settings.requires_tor');
         return badge;
       })()),
-      makeRow('Geolocation', 'Blocked — cannot reveal real location', (() => {
+      makeRow(i18n.t('settings.geoloc'), i18n.t('settings.geoloc_desc'), (() => {
         const badge = document.createElement('span');
         badge.style.cssText = `font-size:11px;padding:2px 8px;border-radius:4px;background:${_settings.torEnabled ? 'rgba(34,197,94,.15)' : 'rgba(100,100,100,.15)'};color:${_settings.torEnabled ? '#22c55e' : 'var(--text-muted)'};font-weight:500`;
-        badge.textContent = _settings.torEnabled ? 'BLOCKED ✓' : 'Requires Tor';
+        badge.textContent = _settings.torEnabled ? i18n.t('settings.blocked') : i18n.t('settings.requires_tor');
         return badge;
       })()),
-      makeRow('Referrer header', 'Completely removed — no origin leaks', (() => {
+      makeRow(i18n.t('settings.referrer'), i18n.t('settings.referrer_desc'), (() => {
         const badge = document.createElement('span');
         badge.style.cssText = `font-size:11px;padding:2px 8px;border-radius:4px;background:${_settings.torEnabled ? 'rgba(34,197,94,.15)' : 'rgba(100,100,100,.15)'};color:${_settings.torEnabled ? '#22c55e' : 'var(--text-muted)'};font-weight:500`;
-        badge.textContent = _settings.torEnabled ? 'REMOVED ✓' : 'Requires Tor';
+        badge.textContent = _settings.torEnabled ? i18n.t('settings.removed') : i18n.t('settings.requires_tor');
         return badge;
       })()),
     ]));
 
-    sec.appendChild(makeGroup('Browsing data', [
-      makeRow('Clear history', 'Permanently deletes all history',
-        makeButton('Clear now', 'settings-btn-danger', async () => {
-          if (confirm('Clear all browsing history?')) {
+    sec.appendChild(makeGroup(i18n.t('settings.browsing_data'), [
+      makeRow(i18n.t('settings.clear_history'), i18n.t('settings.clear_history_desc'),
+        makeButton(i18n.t('settings.clear_now'), 'settings-btn-danger', async () => {
+          if (confirm(i18n.t('hist.clear_confirm'))) {
             await window.discowlAPI.history.clear();
-            showToast('History cleared', 'info');
+            showToast(i18n.t('toast.history_cleared'), 'info');
           }
         })
       )
@@ -487,14 +507,14 @@ const SettingsManager = (() => {
     if (!sec) return;
     sec.innerHTML = '';
 
-    sec.appendChild(makeGroup('Proxy', [
+    sec.appendChild(makeGroup(i18n.t('settings.proxy'), [
       makeRow(
-        'Proxy configuration',
-        'By default, no proxy (direct connection)',
+        i18n.t('settings.proxy_config'),
+        i18n.t('settings.proxy_desc'),
         (() => {
           const span = document.createElement('span');
           span.style.cssText = 'color:var(--text-muted);font-size:12px';
-          span.textContent = _settings.torEnabled ? 'socks5://127.0.0.1:9050 (Tor)' : 'Direct';
+          span.textContent = _settings.torEnabled ? i18n.t('settings.proxy_active') : i18n.t('settings.proxy_direct');
           return span;
         })()
       )
@@ -518,14 +538,14 @@ const SettingsManager = (() => {
     const statusLbl = document.createElement('span');
     statusLbl.id = 'tor-status-lbl';
     statusLbl.style.cssText = 'font-size:13px;color:var(--text-primary)';
-    statusLbl.textContent = 'Checking...';
+    statusLbl.textContent = i18n.t('settings.checking');
 
     statusRow.appendChild(dot);
     statusRow.appendChild(statusLbl);
 
     // Toggle "Activer au demarrage"
     const toggleRow = makeRow(
-      'Enable Tor on startup',
+      i18n.t('settings.tor_enable'),
       'Starts tor/tor/tor.exe on launch and routes traffic through socks5://127.0.0.1:9050',
       makeToggle('toggle-tor', _settings.torEnabled, v => {
         save({ torEnabled: v });
@@ -574,13 +594,13 @@ const SettingsManager = (() => {
     // Statut : proxyActive = le switch Chromium est actif (= au démarrage torEnabled=true)
     if (status.proxyActive && status.running) {
       dot.className = 'tor-dot active';
-      lbl.textContent = 'Tor active — proxy: ' + status.proxyUrl;
+      lbl.textContent = i18n.t('settings.tor_active') + status.proxyUrl;
     } else if (status.proxyActive && !status.running) {
       dot.className = 'tor-dot loading';
-      lbl.textContent = 'Proxy configured — tor.exe starting…';
+      lbl.textContent = i18n.t('settings.tor_starting');
     } else {
       dot.className = 'tor-dot';
-      lbl.textContent = 'Tor disabled — direct connection';
+      lbl.textContent = i18n.t('settings.tor_disabled');
     }
 
     // Bouton Restart : visible dès que le toggle ne correspond pas à la config actuelle
@@ -592,8 +612,8 @@ const SettingsManager = (() => {
     if (restartBtn) {
       restartBtn.style.display = needsRestart ? 'inline-flex' : 'none';
       restartBtn.textContent = shouldRun
-        ? '↺ Restart to enable Tor'
-        : '↺ Restart to disable Tor';
+        ? i18n.t('settings.tor_restart_enable')
+        : i18n.t('settings.tor_restart_disable');
     }
   }
 
@@ -641,7 +661,7 @@ const SettingsManager = (() => {
     sec.appendChild((() => {
       const h = document.createElement('div');
       h.className = 'settings-section-header';
-      h.innerHTML = '<h2>Security</h2><p>Protect access to Discowl with a master password.</p>';
+      h.innerHTML = `<h2>${i18n.t('sec.title')}</h2><p>${i18n.t('sec.subtitle')}</p>`;
       return h;
     })());
 
@@ -654,8 +674,8 @@ const SettingsManager = (() => {
     const toggleLeft = document.createElement('div');
     toggleLeft.className = 'settings-row-left';
     toggleLeft.innerHTML = `
-      <div class="settings-row-label">Use a master password</div>
-      <div class="settings-row-desc">A password will be required every time you open Discowl.</div>`;
+      <div class="settings-row-label">${i18n.t('sec.use_password')}</div>
+      <div class="settings-row-desc">${i18n.t('sec.use_password_desc')}</div>`;
 
     const chk = makeToggle('pw-enabled-toggle', false, (checked) => {
       if (checked) {
@@ -687,7 +707,7 @@ const SettingsManager = (() => {
       <div class="pw-form-inner">
         <label class="form-label">New password
           <div class="pw-input-wrap">
-            <input id="pw-new-input" type="password" class="form-input" placeholder="Enter password" autocomplete="new-password"/>
+            <input id="pw-new-input" type="password" class="form-input" placeholder="" data-i18n-placeholder="pw_form.placeholder" autocomplete="new-password"/>
             <button class="pw-eye-btn" data-target="pw-new-input" title="Show/hide">
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5C1 7.5 3.5 3 7.5 3s6.5 4.5 6.5 4.5S12 12 7.5 12 1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
             </button>
@@ -697,7 +717,7 @@ const SettingsManager = (() => {
         <div id="pw-strength-label" class="pw-strength-label"></div>
         <label class="form-label" style="margin-top:10px">Confirm password
           <div class="pw-input-wrap">
-            <input id="pw-confirm-input" type="password" class="form-input" placeholder="Repeat password" autocomplete="new-password"/>
+            <input id="pw-confirm-input" type="password" class="form-input" placeholder="" data-i18n-placeholder="pw_form.placeholder_confirm" autocomplete="new-password"/>
             <button class="pw-eye-btn" data-target="pw-confirm-input" title="Show/hide">
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5C1 7.5 3.5 3 7.5 3s6.5 4.5 6.5 4.5S12 12 7.5 12 1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
             </button>
@@ -723,21 +743,21 @@ const SettingsManager = (() => {
       if (/[0-9]/.test(val))           score++;
       if (/[^A-Za-z0-9]/.test(val))    score++;
       if (!val) { strengthFill.style.width = '0'; strengthLabel.textContent = ''; return; }
-      const levels = ['','Very weak','Weak','Fair','Strong','Very strong'];
+      const levels = ['',i18n.t('pw_form.strength_very_weak'),i18n.t('pw_form.strength_weak'),i18n.t('pw_form.strength_fair'),i18n.t('pw_form.strength_strong'),i18n.t('pw_form.strength_very_strong')];
       const colors = ['','#ef4444','#f97316','#eab308','#22c55e','#10b981'];
       strengthFill.style.width      = (score / 5 * 100) + '%';
       strengthFill.style.background = colors[score] || '#ef4444';
-      strengthLabel.textContent     = levels[score] || 'Very weak';
+      strengthLabel.textContent     = levels[score] || i18n.t('pw_form.strength_very_weak');
       strengthLabel.style.color     = colors[score] || '#ef4444';
     }
 
     function checkMatch() {
       if (!matchLabel || !pwConfirm?.value) { if (matchLabel) matchLabel.textContent = ''; return; }
       if (pwInput.value === pwConfirm.value) {
-        matchLabel.textContent = '✓ Passwords match';
+        matchLabel.textContent = i18n.t('pw_form.match');
         matchLabel.style.color = '#22c55e';
       } else {
-        matchLabel.textContent = '✗ Passwords do not match';
+        matchLabel.textContent = i18n.t('pw_form.no_match_label');
         matchLabel.style.color = '#ef4444';
       }
     }
@@ -755,12 +775,12 @@ const SettingsManager = (() => {
     document.getElementById('pw-setup-btn')?.addEventListener('click', async () => {
       const pwd = pwInput?.value || '';
       const cnf = pwConfirm?.value || '';
-      if (!pwd)          { showToast('Enter a password', 'error'); return; }
-      if (pwd !== cnf)   { showToast('Passwords do not match', 'error'); return; }
-      if (pwd.length < 6){ showToast('Minimum 6 characters', 'error'); return; }
+      if (!pwd)          { showToast(i18n.t('pw_form.enter_pw'), 'error'); return; }
+      if (pwd !== cnf)   { showToast(i18n.t('pw_form.no_match'), 'error'); return; }
+      if (pwd.length < 6){ showToast(i18n.t('pw_form.min_6'), 'error'); return; }
 
       const btn = document.getElementById('pw-setup-btn');
-      btn.textContent = 'Hashing… (may take a moment)';
+      btn.textContent = i18n.t('pw_form.hashing');
       btn.disabled = true;
       try {
         await window.discowlAPI.password.setup(pwd);
@@ -769,11 +789,11 @@ const SettingsManager = (() => {
         setupForm.style.display = 'none';
         if (pwInput)   pwInput.value   = '';
         if (pwConfirm) pwConfirm.value = '';
-        showToast('Password enabled ✓', 'success');
+        showToast(i18n.t('settings.password_enabled'), 'success');
       } catch(e) {
         showToast('Error: ' + e.message, 'error');
       } finally {
-        btn.textContent = 'Enable password';
+        btn.textContent = i18n.t('pw_form.enable');
         btn.disabled = false;
       }
     });
@@ -786,7 +806,7 @@ const SettingsManager = (() => {
       <div class="pw-form-inner">
         <label class="form-label">Enter current password to disable
           <div class="pw-input-wrap">
-            <input id="pw-disable-input" type="password" class="form-input" placeholder="Current password" autocomplete="current-password"/>
+            <input id="pw-disable-input" type="password" class="form-input" placeholder="" data-i18n-placeholder="pw_form.placeholder_current" autocomplete="current-password"/>
             <button class="pw-eye-btn" data-target="pw-disable-input" title="Show/hide">
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5C1 7.5 3.5 3 7.5 3s6.5 4.5 6.5 4.5S12 12 7.5 12 1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
             </button>
@@ -811,9 +831,9 @@ const SettingsManager = (() => {
 
     async function doDisable() {
       const pwd = disablePwInput?.value || '';
-      if (!pwd) { showToast('Enter your current password', 'error'); return; }
+      if (!pwd) { showToast(i18n.t('pw_form.enter_pw'), 'error'); return; }
       const btn = document.getElementById('pw-disable-btn');
-      btn.textContent = 'Verifying…'; btn.disabled = true;
+      btn.textContent = i18n.t('pw_form.verifying'); btn.disabled = true;
       try {
         const res = await window.discowlAPI.password.disable(pwd);
         if (res.ok) {
@@ -824,13 +844,13 @@ const SettingsManager = (() => {
           if (input) input.checked = false;
           disableForm.style.display = 'none';
           if (disablePwInput) disablePwInput.value = '';
-          showToast('Password disabled', 'success');
+          showToast(i18n.t('settings.password_disabled'), 'success');
         } else {
-          showToast('Incorrect password ✗', 'error');
+          showToast(i18n.t('pw_form.incorrect'), 'error');
           if (disablePwInput) { disablePwInput.value = ''; disablePwInput.focus(); }
         }
       } catch(e) { showToast('Error: ' + e.message, 'error'); }
-      finally { btn.textContent = 'Disable'; btn.disabled = false; }
+      finally { btn.textContent = i18n.t('pw_form.disable'); btn.disabled = false; }
     }
 
     document.getElementById('pw-disable-btn')?.addEventListener('click', doDisable);

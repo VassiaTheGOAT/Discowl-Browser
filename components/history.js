@@ -30,11 +30,11 @@ const HistoryManager = (() => {
 
   /* ── Clear ─────────────────────────────────────────────────── */
   async function clearAll() {
-    if (!confirm('Clear all history?')) return;
+    if (!confirm(i18n.t('hist.clear_confirm'))) return;
     await window.discowlAPI.history.clear();
     _history = [];
     render();
-    showToast('History cleared', 'info');
+    showToast(i18n.t('toast.history_cleared'), 'info');
   }
 
   /* ── Delete single ─────────────────────────────────────────── */
@@ -65,9 +65,9 @@ const HistoryManager = (() => {
       const d = new Date(item.timestamp);
       d.setHours(0,0,0,0);
       let label;
-      if (d.getTime() === today.getTime())     label = "Today";
-      else if (d.getTime() === yesterday.getTime()) label = 'Yesterday';
-      else label = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+      if (d.getTime() === today.getTime())     label = i18n.t('hist.today');
+      else if (d.getTime() === yesterday.getTime()) label = i18n.t('hist.yesterday');
+      else label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
       if (!groups[label]) groups[label] = [];
       groups[label].push(item);
@@ -83,7 +83,7 @@ const HistoryManager = (() => {
 
     const items = filtered();
     if (!items.length) {
-      list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">No history</div>`;
+      list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">${i18n.t('hist.no_history_text')}</div>`;
       return;
     }
 
@@ -126,11 +126,12 @@ const HistoryManager = (() => {
     const time = document.createElement('span');
     time.className = 'h-time';
     const d = new Date(entry.timestamp);
-    time.textContent = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const _locale = { en:'en-GB', fr:'fr-FR', es:'es-ES', de:'de-DE', it:'it-IT' }[i18n.getLang()] || 'en-GB';
+    time.textContent = d.toLocaleTimeString(_locale, { hour: '2-digit', minute: '2-digit' });
 
     const del = document.createElement('button');
     del.className = 'h-delete';
-    del.title = 'Delete';
+    del.title = i18n.t('bm.delete');
     del.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 2l6 6M8 2L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
     del.addEventListener('click', (e) => { e.stopPropagation(); deleteEntry(entry.id); });
 

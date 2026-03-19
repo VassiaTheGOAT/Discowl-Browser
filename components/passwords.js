@@ -96,7 +96,7 @@ const PasswordsManager = (() => {
 
     const btn = document.getElementById('passwords-lock-unlock');
     const err = document.getElementById('passwords-lock-error');
-    if (btn) { btn.textContent = 'Verifying…'; btn.disabled = true; }
+    if (btn) { btn.textContent = i18n.t('pw.verifying'); btn.disabled = true; }
     if (err) err.textContent = '';
 
     try {
@@ -107,13 +107,13 @@ const PasswordsManager = (() => {
         if (inp) inp.value = '';
         await loadEntries();
       } else {
-        if (err) err.textContent = '✗ Incorrect password';
+        if (err) err.textContent = i18n.t('pw.incorrect');
         if (inp) { inp.value = ''; inp.focus(); }
       }
     } catch(e) {
-      if (err) err.textContent = 'Error — try again';
+      if (err) err.textContent = i18n.t('pw.error_retry');
     } finally {
-      if (btn) { btn.textContent = 'Unlock'; btn.disabled = false; }
+      if (btn) { btn.textContent = i18n.t('pw.unlock_btn'); btn.disabled = false; }
     }
   }
 
@@ -172,7 +172,7 @@ const PasswordsManager = (() => {
       userSpan.textContent = entry.username || '—';
       userSpan.className = 'passwords-value-text';
       const copyUserBtn = makeCopyBtn(() => {
-        navigator.clipboard.writeText(entry.username || '').then(() => showToast('Username copied', 'success'));
+        navigator.clipboard.writeText(entry.username || '').then(() => showToast(i18n.t('toast.username_copied'), 'success'));
       });
       userCell.appendChild(userSpan);
       userCell.appendChild(copyUserBtn);
@@ -186,7 +186,7 @@ const PasswordsManager = (() => {
       let _revealed = false;
       const eyeBtn = document.createElement('button');
       eyeBtn.className = 'passwords-icon-btn';
-      eyeBtn.title = 'Show/hide password';
+      eyeBtn.title = i18n.t('pw.show_hide');
       eyeBtn.innerHTML = EYE_ICON;
       eyeBtn.addEventListener('click', async () => {
         _revealed = !_revealed;
@@ -201,7 +201,7 @@ const PasswordsManager = (() => {
       });
       const copyPwBtn = makeCopyBtn(async () => {
         const full = await window.discowlAPI.vault.getById(entry.id);
-        navigator.clipboard.writeText(full?.password || '').then(() => showToast('Password copied', 'success'));
+        navigator.clipboard.writeText(full?.password || '').then(() => showToast(i18n.t('toast.password_copied'), 'success'));
       });
       pwCell.appendChild(pwSpan);
       pwCell.appendChild(eyeBtn);
@@ -212,14 +212,14 @@ const PasswordsManager = (() => {
       actCell.className = 'passwords-cell passwords-actions-cell';
       const delBtn = document.createElement('button');
       delBtn.className = 'passwords-icon-btn passwords-delete-btn';
-      delBtn.title = 'Delete';
+      delBtn.title = i18n.t('pw.delete_password');
       delBtn.innerHTML = TRASH_ICON;
       delBtn.addEventListener('click', async () => {
-        if (!confirm(`Delete saved password for ${entry.host}?`)) return;
+        if (!confirm(i18n.t('pw.delete_confirm').replace('{host}', entry.host))) return;
         await window.discowlAPI.vault.delete(entry.id);
         _entries = _entries.filter(e => e.id !== entry.id);
         renderRows();
-        showToast('Password deleted', 'info');
+        showToast(i18n.t('toast.password_deleted'), 'info');
       });
       actCell.appendChild(delBtn);
 
@@ -235,7 +235,7 @@ const PasswordsManager = (() => {
   function makeCopyBtn(onClick) {
     const btn = document.createElement('button');
     btn.className = 'passwords-icon-btn';
-    btn.title = 'Copy';
+    btn.title = i18n.t('pw.copy_tip');
     btn.innerHTML = COPY_ICON;
     btn.addEventListener('click', onClick);
     return btn;

@@ -49,9 +49,9 @@ window.DownloadManager = (() => {
 
   function stateLabel(item) {
     if (item.state === 'progressing') return pct(item) + '%';
-    if (item.state === 'completed')   return 'Done';
-    if (item.state === 'cancelled')   return 'Cancelled';
-    if (item.state === 'interrupted') return 'Interrupted';
+    if (item.state === 'completed')   return i18n.t('dl.done');
+    if (item.state === 'cancelled')   return i18n.t('dl.cancelled');
+    if (item.state === 'interrupted') return i18n.t('dl.interrupted');
     return item.state;
   }
 
@@ -104,19 +104,19 @@ window.DownloadManager = (() => {
       </div>
       <div class="dl-actions">
         ${item.state === 'completed' ? `
-          <button class="dl-action-btn" data-action="open" title="Open file">
+          <button class="dl-action-btn" data-action="open" title="${i18n.t('dl.open_file_tip')}">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7V2.5A1.5 1.5 0 012.5 1H6l2 2h3.5A1.5 1.5 0 0113 4.5V7" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M1 7h12v5.5A1.5 1.5 0 0111.5 14h-9A1.5 1.5 0 011 12.5V7z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
           </button>
-          <button class="dl-action-btn" data-action="reveal" title="Show in folder">
+          <button class="dl-action-btn" data-action="reveal" title="${i18n.t('dl.show_folder_tip')}">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11 9l2-2-2-2M3 7h10M7 3L5 1H1.5A1.5 1.5 0 000 2.5v9A1.5 1.5 0 001.5 13H12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         ` : ''}
         ${item.state === 'progressing' ? `
-          <button class="dl-action-btn danger" data-action="cancel" title="Cancel">
+          <button class="dl-action-btn danger" data-action="cancel" title="${i18n.t('dl.cancel_tip')}">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
         ` : ''}
-        <button class="dl-action-btn" data-action="remove" title="Remove from list">
+        <button class="dl-action-btn" data-action="remove" title="${i18n.t('dl.remove_tip')}">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 4h10M4 4V2.5A1.5 1.5 0 015.5 1h3A1.5 1.5 0 0110 2.5V4m1 0l-.8 8H3.8L3 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>

@@ -12,49 +12,49 @@ const ToolbarCustomizer = (() => {
   const BUTTON_DEFS = [
     {
       id: 'back',
-      label: 'Back',
+      label: i18n.t('nav.back').split(' (')[0],
       title: 'Go back (Alt+←)',
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M14 9H5M5 9L9 5M5 9l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
     },
     {
       id: 'forward',
-      label: 'Forward',
+      label: i18n.t('nav.forward').split(' (')[0],
       title: 'Go forward (Alt+→)',
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M4 9h9M13 9l-4-4M13 9l-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
     },
     {
       id: 'reload',
-      label: 'Reload',
+      label: i18n.t('nav.reload').split(' (')[0],
       title: 'Reload page (F5)',
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M13.5 4.5A6 6 0 1014.8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M11 2l3 2.5-2.5 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
     },
     {
       id: 'home',
-      label: 'Home',
-      title: 'Go to homepage',
+      label: i18n.t('tab.home'),
+      title: i18n.t('nav.home'),
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M2.5 8.5L9 3l6.5 5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 8v6.5h9V8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 14.5v-4h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
     },
     {
       id: 'bookmarks',
-      label: 'Bookmarks',
+      label: i18n.t('sidebar.bookmarks'),
       title: 'Toggle bookmarks sidebar (Ctrl+B)',
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M3 4h12M3 9h12M3 14h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`
     },
     {
       id: 'history',
-      label: 'History',
+      label: i18n.t('sidebar.history'),
       title: 'Toggle history sidebar (Ctrl+H)',
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M9 5v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
     },
     {
       id: 'downloads',
-      label: 'Downloads',
+      label: i18n.t('nav.downloads').split(' (')[0],
       title: 'Downloads (Ctrl+J)',
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M9 2v9M5 8l4 4 4-4M2 15h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
     },
     {
       id: 'zoom',
-      label: 'Zoom control',
+      label: i18n.t('ct.active_label').split(' ')[0] + ' Zoom',
       title: 'Zoom −/+/% (like Firefox)',
       svg: `<svg width="20" height="20" viewBox="0 0 18 18" fill="none"><rect x="1" y="5" width="16" height="8" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 9h2M9 7v4M13 9h2M9 9h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`
     },
@@ -98,10 +98,10 @@ const ToolbarCustomizer = (() => {
 
     // Placeholder si vide
     if (!active.length) {
-      activeZone.innerHTML = `<div class="ct-drop-hint">Drop buttons here</div>`;
+      activeZone.innerHTML = `<div class="ct-drop-hint">${i18n.t('ct.drop_hint')}</div>`;
     }
     if (!inactive.length) {
-      inactiveZone.innerHTML = `<div class="ct-drop-hint">All buttons are active</div>`;
+      inactiveZone.innerHTML = `<div class="ct-drop-hint">${i18n.t('ct.all_active')}</div>`;
     }
 
     setupDropZones();
@@ -170,7 +170,7 @@ const ToolbarCustomizer = (() => {
     // Bouton sandwich — toujours présent
     const sandwich = document.createElement('div');
     sandwich.className = 'ct-preview-btn';
-    sandwich.title = 'Menu';
+    sandwich.title = i18n.t('nav.menu');
     sandwich.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="4" r="1.4" fill="currentColor"/><circle cx="9" cy="9" r="1.4" fill="currentColor"/><circle cx="9" cy="14" r="1.4" fill="currentColor"/></svg>`;
     bar.appendChild(sandwich);
   }
@@ -200,7 +200,7 @@ const ToolbarCustomizer = (() => {
         <div class="ct-card-label">${def.label}</div>
         <div class="ct-card-desc">${def.title}</div>
       </div>
-      <button class="ct-card-toggle" title="${isActive ? 'Remove from toolbar' : 'Add to toolbar'}">
+      <button class="ct-card-toggle" title="${isActive ? i18n.t('ct.remove_from_toolbar') : i18n.t('ct.add_to_toolbar')}">
         ${isActive
           ? `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`
           : `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`

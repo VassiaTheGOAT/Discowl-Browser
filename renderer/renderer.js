@@ -103,6 +103,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     settings      = await window.discowlAPI.settings.get();
     currentEngine = settings.defaultEngine || 'duckduckgo';
 
+    // Appliquer la langue AVANT tout affichage
+    if (window.i18n) {
+      window.i18n.setLang(settings.language || 'en');
+    }
+
     // Appliquer le thème AVANT tout affichage pour éviter le flash
     applyTheme(settings.theme || 'dark');
 
@@ -117,6 +122,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     initMenubar();
     initVaultBanners();
     initCustomTitlebar();
+
+    // Appliquer les traductions sur tout le DOM statique
+    if (window.i18n) window.i18n.apply();
 
     // Nouvelles fenêtres demandées par des sites → ouvrir en onglet
     window.addEventListener('discowl:open-tab', (e) => {
@@ -146,7 +154,7 @@ window.DiscowlBrowser = {
   getCurrentTitle:   ()      => getActiveTab()?.title || '',
   setEngine:         (key)   => setEngine(key),
   setTheme:          (theme) => applyTheme(theme),
-  onSettingsChanged: (s)     => { settings = s; applySettings(s); },
+  onSettingsChanged: (s)     => { settings = s; applySettings(s); if (window.i18n && s.language) { window.i18n.setLang(s.language); window.i18n.apply(); } },
   applyToolbarConfig: (cfg)  => applyToolbarConfig(cfg),
   getTabById:        (id)    => getTab(id),
   switchToTab:       (id)    => switchTab(id),
@@ -175,7 +183,7 @@ function _openCustomizeTab() {
   document.getElementById('webview-container').appendChild(webview);
 
   const tab = {
-    id, title: 'Customize toolbar', url: 'about:customize-toolbar',
+    id, title: i18n.t('tab.customize'), url: 'about:customize-toolbar',
     favicon: '', isPrivate: false, isLoading: false,
     partition: 'persist:main', webview,
     canGoBack: false, canGoForward: false, zoom: 1,
@@ -239,7 +247,7 @@ function _openDownloadsTab() {
 
   const tab = {
     id,
-    title:     'Downloads',
+    title:     i18n.t('tab.downloads'),
     url:       'about:downloads',
     favicon:   '',
     isPrivate: false,
@@ -290,7 +298,7 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   /* ─── Tab state ──────────────────────────────────────────── */
   const tab = {
     id,
-    title:     isPrivate ? 'Private Home' : 'Home',
+    title:     isPrivate ? i18n.t('tab.private_home') : i18n.t('tab.home'),
     url:       targetUrl === 'about:newtab' ? '' : targetUrl,
     favicon:   '',
     isPrivate,
@@ -411,7 +419,7 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   webview.addEventListener('did-fail-load', (e) => {
     if (e.errorCode === -3) return; // Aborted — user navigated away
     tab.isLoading = false;
-    tab.title = 'Erreur de chargement';
+    tab.title = i18n.t('tab.error');
     refreshTab(id);
   });
 
@@ -468,14 +476,14 @@ function renderTabItem(tab) {
 
   const close = document.createElement('button');
   close.className = 'tab-close';
-  close.title = 'Close tab';
+  close.title = i18n.t('tab.close');
   close.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 2l6 6M8 2L2 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
   close.addEventListener('click', (e) => { e.stopPropagation(); closeTab(tab.id); });
 
   if (tab.isPrivate) {
     const badge = document.createElement('span');
     badge.className = 'tab-private-badge';
-    badge.title = 'Private browsing';
+    badge.title = i18n.t('tab.private');
     badge.textContent = '🕵';
     el.appendChild(badge);
   }
@@ -704,8 +712,8 @@ function switchTab(id) {
     if (!tab.url) {
       // Mettre à jour le titre selon le mode actuel (Tor peut avoir changé)
       tab.title = tab.isPrivate
-        ? (settings.torEnabled ? 'Tor Home' : 'Private Home')
-        : 'Home';
+        ? (settings.torEnabled ? i18n.t('tab.tor_home') : i18n.t('tab.private_home'))
+        : i18n.t('tab.home');
       refreshTab(tab.id);
       updateNewtabMode(tab.isPrivate);
       clearNewtabSearch();
@@ -926,10 +934,10 @@ function updateSecurityIcon(url) {
     icon.title = '';
   } else if (url.startsWith('https://')) {
     icon.className = 'security-icon';
-    icon.title = 'Secure connection (HTTPS)';
+    icon.title = i18n.t('nav.secure');
   } else {
     icon.className = 'security-icon warning';
-    icon.title = 'Insecure connection (HTTP)';
+    icon.title = i18n.t('nav.insecure');
   }
 }
 
@@ -1021,7 +1029,7 @@ function setupToolbar() {
     // Fallback : lire l'URL depuis la barre si tab.url est vide
     const url = tab.url || document.getElementById('url-bar')?.value?.trim();
     if (!url || url === 'about:newtab' || url.startsWith('about:')) return;
-    const title = tab.title && tab.title !== 'Home' && tab.title !== 'Private Home' && tab.title !== 'Tor Home'
+    const title = tab.title && tab.title !== i18n.t('tab.home') && tab.title !== i18n.t('tab.private_home') && tab.title !== i18n.t('tab.tor_home')
       ? tab.title
       : url;
     window.BookmarksManager?.openStarPopup(title, url);
@@ -1197,9 +1205,9 @@ function initVaultBanners() {
     try {
       const host = new URL(url).hostname;
       await window.discowlAPI.vault.save(host, username, password);
-      showToast('Password saved ✓', 'success');
+      showToast(i18n.t('toast.password_saved'), 'success');
     } catch(e) {
-      showToast('Could not save password', 'error');
+      showToast(i18n.t('toast.password_save_error'), 'error');
     }
     dismissSavePrompt();
   });
@@ -1270,7 +1278,7 @@ function _updateMaxIcon(isMax) {
       `<rect x="2" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.4" fill="none" style="fill:var(--bg-base)"/>`
     : `<rect x="2" y="2" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.4" fill="none"/>`;
   const btn = document.getElementById('wc-maximize');
-  if (btn) btn.title = isMax ? 'Restore' : 'Maximize';
+  if (btn) btn.title = isMax ? i18n.t('nav.restore') : i18n.t('nav.maximize');
 }
 
 
@@ -1288,13 +1296,13 @@ function initSnapLayouts() {
   // Chaque groupe = une miniature avec zones colorables individuellement
   const LAYOUTS = [
     // Groupe 1 : plein écran
-    { id: 'full', label: 'Full screen',
+    { id: 'full', label: i18n.t('snap.full'),
       zones: [{x:0,y:0,w:1,h:1}],
       active: [0],
       calc: (w) => [{ x:w.x, y:w.y, width:w.width, height:w.height }] },
 
     // Groupe 2 : 1/2 | 1/2
-    { id: 'half-half', label: 'Side by side',
+    { id: 'half-half', label: i18n.t('snap.half'),
       zones: [{x:0,y:0,w:.5,h:1},{x:.5,y:0,w:.5,h:1}],
       active: [0],
       calc: (w) => [
@@ -1303,7 +1311,7 @@ function initSnapLayouts() {
       ] },
 
     // Groupe 3 : 1/3 | 1/3 | 1/3
-    { id: 'thirds', label: 'Three columns',
+    { id: 'thirds', label: i18n.t('snap.thirds'),
       zones: [{x:0,y:0,w:.33,h:1},{x:.33,y:0,w:.34,h:1},{x:.67,y:0,w:.33,h:1}],
       active: [0],
       calc: (w) => [
@@ -1313,7 +1321,7 @@ function initSnapLayouts() {
       ] },
 
     // Groupe 4 : 2/3 | 1/3
-    { id: 'two-third', label: 'Two thirds left',
+    { id: 'two-third', label: i18n.t('snap.two_third'),
       zones: [{x:0,y:0,w:.67,h:1},{x:.67,y:0,w:.33,h:1}],
       active: [0],
       calc: (w) => [
@@ -1322,7 +1330,7 @@ function initSnapLayouts() {
       ] },
 
     // Groupe 5 : 1/2 | 1/4 / 1/4
-    { id: 'half-quarter', label: 'Half and quarters',
+    { id: 'half-quarter', label: i18n.t('snap.half_quarter'),
       zones: [{x:0,y:0,w:.5,h:1},{x:.5,y:0,w:.5,h:.5},{x:.5,y:.5,w:.5,h:.5}],
       active: [0],
       calc: (w) => [
@@ -1332,7 +1340,7 @@ function initSnapLayouts() {
       ] },
 
     // Groupe 6 : 1/4 | 1/4 | 1/4 | 1/4
-    { id: 'quarters', label: 'Four quadrants',
+    { id: 'quarters', label: i18n.t('snap.quarters'),
       zones: [{x:0,y:0,w:.5,h:.5},{x:.5,y:0,w:.5,h:.5},{x:0,y:.5,w:.5,h:.5},{x:.5,y:.5,w:.5,h:.5}],
       active: [0],
       calc: (w) => [
@@ -1350,7 +1358,7 @@ function initSnapLayouts() {
 
     const title = document.createElement('div');
     title.className = 'snap-title';
-    title.textContent = 'Snap layouts';
+    title.textContent = i18n.t('snap.title');
     popup.appendChild(title);
 
     const grid = document.createElement('div');
@@ -1601,7 +1609,7 @@ function initMenubar() {
   mb('forward',          () => document.getElementById('forward-btn')?.click());
   mb('show-history',     () => window.SidebarManager?.toggleRight());
   mb('clear-history',    () => {
-    if (confirm('Clear all browsing history?')) window.HistoryManager?.clear();
+    if (confirm(i18n.t('hist.clear_confirm'))) window.HistoryManager?.clear();
   });
 
   // Bookmarks
@@ -1613,12 +1621,12 @@ function initMenubar() {
   mb('passwords',        () => _openPasswordsTab());
   mb('github',           () => window.discowlAPI.shell.openExternal('https://github.com/VassiaTheGOAT/Discowl-Browser'));
   mb('check-updates',    async () => {
-    showToast('Checking for updates…', 'info');
+    showToast(i18n.t('toast.update_check'), 'info');
     try {
       const result = await window.discowlAPI.updates.check();
-      if (result.upToDate) showToast('Already up to date ✓', 'success');
+      if (result.upToDate) showToast(i18n.t('settings.up_to_date'), 'success');
       else showToast(`Update ${result.latest} available — restart to install`, 'info');
-    } catch { showToast('Could not check for updates', 'error'); }
+    } catch { showToast(i18n.t('settings.update_error'), 'error'); }
   });
 }
 

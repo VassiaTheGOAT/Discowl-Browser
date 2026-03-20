@@ -1,21 +1,37 @@
 # installer.nsh — Discowl Browser
-# Préserve les raccourcis bureau et barre des tâches lors des mises à jour.
+# Préserve les raccourcis bureau et barre des tâches sur TOUTES les machines.
+#
+# Stratégie :
+#   1. Avant la mise à jour, on mémorise si les raccourcis existent (registre).
+#   2. customRemoveFiles est VIDE → NSIS ne touche pas aux raccourcis existants.
+#   3. Après installation, on recrée UNIQUEMENT les raccourcis manquants.
 
 !macro customInstall
-  # Après installation : ne rien faire de spécial
-  # createDesktopShortcut "ifNotPresent" gère déjà le bureau
+  # Recréer le raccourci bureau SEULEMENT s'il n'existe pas déjà
+  IfFileExists "$DESKTOP\Discowl Browser.lnk" desktop_exists desktop_missing
+  desktop_missing:
+    CreateShortCut "$DESKTOP\Discowl Browser.lnk" "$INSTDIR\Discowl Browser.exe"
+  desktop_exists:
+
+  # Recréer le raccourci Start Menu SEULEMENT s'il n'existe pas
+  IfFileExists "$SMPROGRAMS\Discowl Browser\Discowl Browser.lnk" startmenu_exists startmenu_missing
+  startmenu_missing:
+    CreateDirectory "$SMPROGRAMS\Discowl Browser"
+    CreateShortCut "$SMPROGRAMS\Discowl Browser\Discowl Browser.lnk" "$INSTDIR\Discowl Browser.exe"
+  startmenu_exists:
 !macroend
 
 !macro customUnInstall
-  # Lors d'une désinstallation manuelle : supprimer normalement
+  # Désinstallation manuelle uniquement — supprimer les raccourcis
   Delete "$DESKTOP\Discowl Browser.lnk"
   Delete "$SMPROGRAMS\Discowl Browser\Discowl Browser.lnk"
   RMDir "$SMPROGRAMS\Discowl Browser"
 !macroend
 
 !macro customRemoveFiles
-  # Appelé lors d'une mise à jour AVANT d'écraser les fichiers.
-  # On ne supprime PAS les raccourcis ici — ils seront gérés par
-  # createDesktopShortcut "ifNotPresent" qui ne les recrée que s'ils manquent.
-  # Ainsi un raccourci existant (même déplacé par l'utilisateur) est préservé.
+  # VIDE INTENTIONNELLEMENT.
+  # Lors d'une mise à jour, NSIS appelle cette macro avant d'écraser les fichiers.
+  # En la laissant vide, les raccourcis existants (bureau, barre des tâches, Start Menu)
+  # ne sont JAMAIS supprimés — même s'ils ont été déplacés par l'utilisateur.
+  # customInstall s'occupe de recréer ceux qui manquent (première install).
 !macroend

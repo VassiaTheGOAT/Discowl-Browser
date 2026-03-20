@@ -1,10 +1,10 @@
 {
   "name": "discowl-browser",
   "version": "1.2.5",
-  "description": "Discowl Browser - A new gen browser",
+  "description": "Discowl Browser - New gen browser",
   "main": "main/main.js",
   "author": "Discowl",
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win --publish never",
@@ -48,16 +48,18 @@
           ]
         }
       ],
-      "icon": "assets/logo-discowl.ico"
+      "icon": "assets/logo-discowl.ico",
+      "executableName": "Discowl Browser"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
       "shortcutName": "Discowl Browser",
       "include": "build/installer.nsh",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     },
     "mac": {
       "target": "dmg",
@@ -73,8 +75,6 @@
         "to": "tor"
       }
     ],
-
     "artifactName": "Discowl-Setup.exe"
-    
   }
 }

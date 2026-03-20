@@ -12,14 +12,14 @@
       background: #0f1117;
       color: #e2e8f0;
       width: 420px;
-      height: 240px;
+      height: 260px;
       overflow: hidden;
       user-select: none;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 28px;
+      gap: 24px;
       -webkit-app-region: drag;
     }
 
@@ -31,16 +31,12 @@
     }
 
     .logo {
-      width: 72px;
-      height: 72px;
+      width: 64px;
+      height: 64px;
       object-fit: contain;
     }
 
-    .brand {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
+    .brand { display: flex; flex-direction: column; gap: 3px; }
 
     .brand-name {
       font-size: 22px;
@@ -52,60 +48,110 @@
       letter-spacing: -0.3px;
     }
 
-    .brand-version {
-      font-size: 11px;
-      color: #64748b;
-      letter-spacing: 0.5px;
-    }
+    .brand-version { font-size: 11px; color: #64748b; letter-spacing: 0.5px; }
 
-    /* ── Zone statut ── */
-    .status-area {
+    /* ── Panneau de téléchargement ── */
+    .dl-panel {
+      width: 340px;
       display: flex;
       flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Ligne statut + pourcentage */
+    .dl-row {
+      display: flex;
       align-items: center;
-      gap: 10px;
-      width: 300px;
+      justify-content: space-between;
     }
 
     .status-text {
       font-size: 12px;
       color: #94a3b8;
-      text-align: center;
-      min-height: 16px;
-      transition: opacity 0.2s;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    /* ── Barre de progression ── */
+    .dl-pct {
+      font-size: 12px;
+      font-weight: 600;
+      color: #0cc0df;
+      min-width: 36px;
+      text-align: right;
+      opacity: 0;
+      transition: opacity .2s;
+    }
+    .dl-pct.visible { opacity: 1; }
+
+    /* Barre de progression */
     .progress-wrap {
       width: 100%;
-      height: 4px;
+      height: 5px;
       background: #1e2330;
-      border-radius: 2px;
+      border-radius: 3px;
       overflow: hidden;
       opacity: 0;
       transition: opacity 0.3s;
     }
-
     .progress-wrap.visible { opacity: 1; }
 
     .progress-bar {
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #0cc0df, #ffde59);
-      border-radius: 2px;
-      transition: width 0.3s ease;
+      border-radius: 3px;
+      transition: width 0.25s ease;
     }
 
-    /* Indéterminé (checking…) */
     .progress-bar.indeterminate {
-      width: 30%;
+      width: 28%;
       animation: slide 1.4s ease-in-out infinite;
     }
 
     @keyframes slide {
-      0%   { transform: translateX(-100%); }
-      100% { transform: translateX(450%); }
+      0%   { transform: translateX(-150%); }
+      100% { transform: translateX(500%); }
     }
+
+    /* Ligne vitesse + taille */
+    .dl-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 14px;
+    }
+
+    .dl-speed, .dl-size {
+      font-size: 10px;
+      color: #475569;
+      opacity: 0;
+      transition: opacity .2s;
+    }
+    .dl-speed.visible, .dl-size.visible { opacity: 1; }
+
+    /* État "installing" */
+    .installing-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .installing-row.visible { opacity: 1; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #1e2330;
+      border-top-color: #0cc0df;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .installing-text { font-size: 12px; color: #64748b; }
   </style>
 </head>
 <body>
@@ -118,18 +164,48 @@
     </div>
   </div>
 
-  <div class="status-area">
-    <div class="status-text" id="status">Checking for updates…</div>
+  <div class="dl-panel">
+    <!-- Ligne statut + % -->
+    <div class="dl-row">
+      <div class="status-text" id="status">Checking for updates…</div>
+      <div class="dl-pct" id="dl-pct"></div>
+    </div>
+
+    <!-- Barre -->
     <div class="progress-wrap" id="progress-wrap">
       <div class="progress-bar indeterminate" id="progress-bar"></div>
+    </div>
+
+    <!-- Vitesse + taille -->
+    <div class="dl-meta">
+      <div class="dl-speed" id="dl-speed"></div>
+      <div class="dl-size"  id="dl-size"></div>
+    </div>
+
+    <!-- Spinner installation -->
+    <div class="installing-row" id="installing-row">
+      <div class="spinner"></div>
+      <div class="installing-text" id="installing-text">Installing…</div>
     </div>
   </div>
 
   <script>
-    const statusEl   = document.getElementById('status');
-    const wrapEl     = document.getElementById('progress-wrap');
-    const barEl      = document.getElementById('progress-bar');
-    const verEl      = document.getElementById('ver');
+    const statusEl      = document.getElementById('status');
+    const wrapEl        = document.getElementById('progress-wrap');
+    const barEl         = document.getElementById('progress-bar');
+    const verEl         = document.getElementById('ver');
+    const pctEl         = document.getElementById('dl-pct');
+    const speedEl       = document.getElementById('dl-speed');
+    const sizeEl        = document.getElementById('dl-size');
+    const installingEl  = document.getElementById('installing-row');
+
+    // ── Helpers ──────────────────────────────────────────────────
+    function fmt(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024)        return bytes + ' B';
+      if (bytes < 1048576)     return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
 
     function setStatus(txt) { statusEl.textContent = txt; }
 
@@ -137,27 +213,56 @@
       wrapEl.classList.add('visible');
       barEl.classList.add('indeterminate');
       barEl.style.width = '';
+      pctEl.classList.remove('visible');
+      speedEl.classList.remove('visible');
+      sizeEl.classList.remove('visible');
     }
 
-    function showProgress(pct) {
+    function showProgress(pct, received, total, speed) {
       wrapEl.classList.add('visible');
       barEl.classList.remove('indeterminate');
       barEl.style.width = pct + '%';
+
+      pctEl.textContent = pct + '%';
+      pctEl.classList.add('visible');
+
+      if (received && total) {
+        sizeEl.textContent = fmt(received) + ' / ' + fmt(total);
+        sizeEl.classList.add('visible');
+      }
+      if (speed) {
+        speedEl.textContent = fmt(speed) + '/s';
+        speedEl.classList.add('visible');
+      }
+    }
+
+    function showInstalling(version) {
+      barEl.classList.remove('indeterminate');
+      barEl.style.width = '100%';
+      pctEl.textContent = '100%';
+      speedEl.classList.remove('visible');
+      sizeEl.classList.remove('visible');
+      installingEl.classList.add('visible');
+      statusEl.textContent = `Update ${version} ready…`;
     }
 
     function hideProgress() {
       wrapEl.classList.remove('visible');
+      pctEl.classList.remove('visible');
+      speedEl.classList.remove('visible');
+      sizeEl.classList.remove('visible');
     }
 
-    // Lire la version depuis l'API
-    window.updaterAPI?.getVersion().then(v => {
-      verEl.textContent = 'v' + v;
-    });
-
-    // Démarrer en mode indéterminé
+    // ── Init ─────────────────────────────────────────────────────
+    window.updaterAPI?.getVersion().then(v => { verEl.textContent = 'v' + v; });
     showIndeterminate();
 
-    // Écouter les événements du main process
+    // ── Variables pour calcul vitesse ────────────────────────────
+    let _lastReceived = 0;
+    let _lastTime     = Date.now();
+    let _speed        = 0;
+
+    // ── Écoute des événements ────────────────────────────────────
     window.updaterAPI?.onStatus((event) => {
       switch (event.type) {
 
@@ -167,27 +272,36 @@
           break;
 
         case 'not-available':
-          setStatus('Up to date. Launching…');
+          setStatus('Already up to date. Launching…');
           hideProgress();
           break;
 
         case 'available':
-          setStatus(`Update ${event.version} available — downloading…`);
+          setStatus(`Update ${event.version} found — starting download…`);
           showProgress(0);
+          _lastReceived = 0;
+          _lastTime     = Date.now();
           break;
 
-        case 'progress':
-          setStatus(`Downloading update ${event.version}… ${event.percent}%`);
-          showProgress(event.percent);
+        case 'progress': {
+          const now      = Date.now();
+          const elapsed  = (now - _lastTime) / 1000;
+          if (elapsed > 0.3) {
+            _speed        = (event.received - _lastReceived) / elapsed;
+            _lastReceived = event.received;
+            _lastTime     = now;
+          }
+          setStatus(`Downloading Discowl ${event.version}…`);
+          showProgress(event.percent, event.received, event.total, _speed > 0 ? _speed : 0);
           break;
+        }
 
         case 'downloaded':
-          setStatus(`Update ${event.version} ready — installing…`);
-          showProgress(100);
+          showInstalling(event.version);
           break;
 
         case 'error':
-          setStatus('Update check failed — launching…');
+          setStatus('Update failed — launching current version…');
           hideProgress();
           break;
       }

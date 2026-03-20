@@ -273,8 +273,19 @@ function checkAndUpdate() {
               launch(1000);
               return;
             }
-            // /S = silent install NSIS, remplace l'installation existante
-            spawn(tmpPath, ['/S'], {
+            // Récupérer le répertoire d'installation actuel
+            // pour que NSIS mette à jour sur place sur TOUTES les machines.
+            // Sans /D=, NSIS utilise le chemin par défaut → nouveau raccourci.
+            const installDir = path.dirname(path.dirname(process.execPath));
+            const args = ['/S'];
+
+            // Passer le répertoire d'installation si détectable
+            if (installDir && installDir.length > 3 && !installDir.includes('AppData\Local\Temp')) {
+              args.push(`/D=${installDir}`);
+            }
+
+            console.log('[Updater] Launching installer:', tmpPath, args.join(' '));
+            spawn(tmpPath, args, {
               detached: true,
               stdio:    'ignore'
             }).unref();

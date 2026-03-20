@@ -1,10 +1,10 @@
 {
   "name": "discowl-browser",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Discowl Browser - New gen browser",
   "main": "main/main.js",
   "author": "Discowl",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win --publish never",

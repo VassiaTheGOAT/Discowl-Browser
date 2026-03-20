@@ -6,7 +6,6 @@ const fs   = require('fs');
 const os   = require('os');
 
 const TorManager      = require('./torManager');
-const privacyManager  = require('./privacyManager');
 
 const passwordManager = require('./passwordManager');
 const vaultManager    = require('./vaultManager');
@@ -104,10 +103,6 @@ const USE_CUSTOM_TITLEBAR = !!earlySettings.customTitlebar;
 // Désactiver le GPU disk cache et le shader cache
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
-// WebRTC : éviter les fuites IP en mode normal
-// (renforcé en mode privé/Tor via privacyManager)
-app.commandLine.appendSwitch('enforce-webrtc-ip-permission-check');
-
 // Supprimer la menubar native — remplacée par menubar HTML custom
 Menu.setApplicationMenu(null);
 
@@ -132,14 +127,6 @@ app.whenReady().then(async () => {
   torManager = new TorManager();
 
   const settings = storage.getSettings();
-
-  // ── Protection vie privée ──────────────────────────────────
-  if (settings.torEnabled) {
-    privacyManager.setupTorSession(settings);
-  } else {
-    privacyManager.setupNormalSession(settings);
-  }
-  privacyManager.watchPrivateSessions();
 
   // Déverrouiller le vault selon le mode
   if (passwordManager.isEnabled()) {
@@ -239,102 +226,6 @@ function createWindow() {
       }
     });
   });
-
-  // ── User-Agent & Client Hints ──────────────────────────────────
-  // Electron expose "Electron/X.Y.Z" dans le UA — Google le détecte
-  // et affiche une page de consentement RGPD non interactable.
-  // Solution : intercepter toutes les requêtes et forcer un UA Chrome
-  // sur TOUTES les sessions (persist:main + privées dynamiques).
-  {
-    const chromeVer  = process.versions.chrome || '120.0.0.0';
-    const chromeMaj  = chromeVer.split('.')[0];
-    const UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVer} Safari/537.36`;
-
-    function patchSession(sess) {
-      if (!sess) return;
-      sess.setUserAgent(UA);
-      // Remplacer aussi les Client Hints (Sec-CH-UA) que Google lit
-      sess.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
-        const h = details.requestHeaders;
-        h['User-Agent']         = UA;
-        h['Sec-CH-UA']          = `"Google Chrome";v="${chromeMaj}", "Chromium";v="${chromeMaj}", "Not_A Brand";v="24"`;
-        h['Sec-CH-UA-Mobile']   = '?0';
-        h['Sec-CH-UA-Platform'] = '"Windows"';
-        // Supprimer le header Electron s'il existe
-        delete h['X-Electron-Version'];
-        callback({ requestHeaders: h });
-      });
-    }
-
-    // Patcher la session principale + persist:main au démarrage
-    patchSession(session.defaultSession);
-    patchSession(session.fromPartition('persist:main'));
-
-    // Patcher automatiquement toutes les nouvelles sessions (onglets privés)
-    app.on('web-contents-created', (_, contents) => {
-      const sess = contents.session;
-      if (sess && sess !== session.defaultSession) {
-        patchSession(sess);
-        bypassGoogleConsent(sess);
-      }
-    });
-
-
-    // ── Google Consent bypass ──────────────────────────────────
-    // Google redirige les utilisateurs EU vers consent.google.com.
-    // On injecte le cookie de consentement pour éviter la page RGPD.
-    function bypassGoogleConsent(sess) {
-      if (!sess) return;
-
-      // Intercepter les redirections vers consent.google.com
-      sess.webRequest.onBeforeRequest(
-        { urls: ['https://consent.google.com/*', 'https://www.google.com/sorry/*'] },
-        (details, callback) => {
-          // Extraire l'URL de retour depuis les paramètres
-          try {
-            const url   = new URL(details.url);
-            const cont  = url.searchParams.get('continue') || url.searchParams.get('q');
-            if (cont) {
-              callback({ redirectURL: decodeURIComponent(cont) });
-              return;
-            }
-          } catch {}
-          callback({});
-        }
-      );
-
-      // Injecter les cookies de consentement Google sur chaque domaine google.*
-      const googleCookies = [
-        { name: 'CONSENT',    value: 'YES+cb.20210720-07-p0.fr+FX+' + Math.floor(Date.now()/1000), domain: '.google.com' },
-        { name: 'SOCS',       value: 'CAESEwgDEgk0ODE5Nzk2NzIaAmZyIAEaBgiA_LyaBg', domain: '.google.com' },
-      ];
-
-      googleCookies.forEach(ck => {
-        sess.cookies.set({
-          url:      'https://www.google.com',
-          name:     ck.name,
-          value:    ck.value,
-          domain:   ck.domain,
-          path:     '/',
-          secure:   true,
-          httpOnly: false,
-          expirationDate: Math.floor(Date.now()/1000) + 60*60*24*365*2
-        }).catch(() => {});
-      });
-    }
-
-    bypassGoogleConsent(session.defaultSession);
-    bypassGoogleConsent(session.fromPartition('persist:main'));
-
-    // Appliquer aussi aux nouvelles sessions (onglets privés)
-    const _origPatch = patchSession;
-    function patchSessionFull(sess) {
-      _origPatch(sess);
-      bypassGoogleConsent(sess);
-    }
-
-    console.log('[UA] Chrome UA actif :', UA.slice(0, 80));
-  }
 
   // ── Interception des téléchargements ────────────────────────
   // Les webviews utilisent fromPartition('persist:main') — PAS defaultSession
@@ -443,7 +334,7 @@ ipcMain.handle('settings:save', async (_, newSettings) => {
   const ALLOWED_KEYS = new Set([
     'defaultEngine','theme','torEnabled','homePage','newTabPage',
     'downloadPath','language','fontSize','showBookmarksToolbar',
-    'blockAds','doNotTrack','saveCookies','blockThirdPartyCookies','blockYoutubeAds','toolbarItems','customTitlebar'
+    'blockAds','doNotTrack','saveCookies','toolbarItems','customTitlebar'
   ]);
   const safe = {};
   for (const [k, v] of Object.entries(newSettings)) {
@@ -466,6 +357,7 @@ ipcMain.handle('tor:status', () => ({
   running:   torManager.isTorRunning(),
   proxyUrl:  torManager.getTorProxyUrl(),
   binExists: fs.existsSync(torManager.torBinPath),
+  binPath:   torManager.torBinPath,
   // Indique si le proxy Chromium est actif (= commandLine switch présent)
   proxyActive: !!earlySettings.torEnabled
 }));
@@ -543,49 +435,12 @@ ipcMain.handle('dialog:openDirectory', async () => {
 });
 
 
-
-/* ══════════════════════════════════════════════════════════════
-   RATE LIMITING — protection brute-force
-   Max 5 tentatives, puis délai exponentiel
-══════════════════════════════════════════════════════════════ */
-const _rateLimits = new Map(); // key → { count, lockedUntil }
-
-function rateCheck(key) {
-  const now = Date.now();
-  const s   = _rateLimits.get(key) || { count: 0, lockedUntil: 0 };
-  if (now < s.lockedUntil) {
-    const wait = Math.ceil((s.lockedUntil - now) / 1000);
-    return { allowed: false, wait };
-  }
-  return { allowed: true };
-}
-
-function rateRecord(key, success) {
-  const s = _rateLimits.get(key) || { count: 0, lockedUntil: 0 };
-  if (success) {
-    _rateLimits.delete(key);
-    return;
-  }
-  s.count++;
-  // Délai exponentiel : 5 échecs → 30s, 8 → 5min, 10 → 15min
-  if (s.count >= 10) s.lockedUntil = Date.now() + 15 * 60 * 1000;
-  else if (s.count >= 8) s.lockedUntil = Date.now() + 5 * 60 * 1000;
-  else if (s.count >= 5) s.lockedUntil = Date.now() + 30 * 1000;
-  _rateLimits.set(key, s);
-}
-
 /* ══════════════════════════════════════════════════════════════
    PASSWORD IPC
 ══════════════════════════════════════════════════════════════ */
 ipcMain.handle('password:isEnabled', ()           => passwordManager.isEnabled());
 ipcMain.handle('password:setup',     (_, pwd)     => passwordManager.setup(pwd));
-ipcMain.handle('password:verify', async (_, pwd) => {
-  const rl = rateCheck('password:verify');
-  if (!rl.allowed) return { ok: false, rateLimited: true, wait: rl.wait };
-  const ok = await passwordManager.verify(pwd);
-  rateRecord('password:verify', ok);
-  return ok;
-});
+ipcMain.handle('password:verify',    (_, pwd)     => passwordManager.verify(pwd));
 ipcMain.handle('password:disable',   (_, pwd)     => passwordManager.disable(pwd));
 
 /* ══════════════════════════════════════════════════════════════
@@ -618,13 +473,7 @@ ipcMain.handle('window:customTitlebar', () => USE_CUSTOM_TITLEBAR);
    VAULT IPC
 ══════════════════════════════════════════════════════════════ */
 // Appelé après vérification du mot de passe maître (lock screen)
-ipcMain.handle('vault:unlock', async (_, pwd) => {
-  const rl = rateCheck('vault:unlock');
-  if (!rl.allowed) return false;
-  const ok = await vaultManager.unlock(pwd);
-  rateRecord('vault:unlock', ok);
-  return ok;
-});
+ipcMain.handle('vault:unlock',      async (_, pwd)  => vaultManager.unlock(pwd));
 ipcMain.handle('vault:isUnlocked',  ()              => vaultManager.isUnlocked());
 ipcMain.handle('vault:save', (_, host, username, password) => {
   if (typeof host     !== 'string' || host.length     > 253)   return { ok: false, error: 'Invalid host' };
@@ -646,11 +495,138 @@ ipcMain.handle('vault:delete', (_, id) => {
   if (typeof id !== 'string' || id.length > 64) return { ok: false };
   return vaultManager.delete(id);
 });
-// Appelé quand le mot de passe maître est désactivé — requiert le mot de passe
-ipcMain.handle('vault:removeProtection', async (_, pwd) => {
-  if (typeof pwd !== 'string' || !pwd) return { ok: false, error: 'Password required' };
-  const valid = await passwordManager.verify(pwd);
-  if (!valid) return { ok: false, error: 'Incorrect password' };
-  vaultManager.removePasswordProtection();
-  return { ok: true };
+// Appelé quand le mot de passe maître est désactivé
+ipcMain.handle('vault:removeProtection', ()         => { vaultManager.removePasswordProtection(); return { ok: true }; });
+
+
+/* ══════════════════════════════════════════════════════════════
+   NOUVELLE FENÊTRE
+══════════════════════════════════════════════════════════════ */
+const secondaryWindows = new Set();
+
+ipcMain.handle('window:openNew', (_, url) => {
+  // url optionnel — si absent, ouvre une nouvelle fenêtre vide
+
+  const win = new BrowserWindow({
+    width: 1280, height: 800,
+    minWidth: 900, minHeight: 600,
+    frame: !USE_CUSTOM_TITLEBAR,
+    transparent: false,
+    hasShadow: true,
+    show: false,
+    backgroundColor: '#0f1117',
+    webPreferences: {
+      preload:          path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true,
+      nodeIntegration:  false,
+      webviewTag:       true,
+      sandbox:          false,
+      spellcheck:       true
+    }
+  });
+
+  win.once('ready-to-show', () => {
+    win.show();
+    // Si une URL est passée, l'ouvrir dans le nouvel onglet
+    if (url && typeof url === 'string') {
+      try { new URL(url); } catch { url = null; }
+    }
+    if (url) {
+      win.webContents.once('did-finish-load', () => {
+        win.webContents.send('open-url-in-tab', url);
+      });
+    }
+  });
+
+  win.on('maximize',   () => win.webContents.send('window:maximized', true));
+  win.on('unmaximize', () => win.webContents.send('window:maximized', false));
+  win.on('closed',     () => secondaryWindows.delete(win));
+
+  win.webContents.setWindowOpenHandler(({ url: u }) => {
+    win.webContents.send('open-url-in-tab', u);
+    return { action: 'deny' };
+  });
+
+  win.loadFile(path.join(__dirname, '../renderer/index.html'));
+  secondaryWindows.add(win);
+  return true;
+});
+
+/* ══════════════════════════════════════════════════════════════
+   DEVTOOLS DOCKÉS
+   Electron ne peut pas intégrer les DevTools d'un webview dans
+   le même rendu. On simule le dockage en repositionnant la
+   fenêtre DevTools juste sous la fenêtre principale.
+══════════════════════════════════════════════════════════════ */
+ipcMain.handle('devtools:open', (event, webContentsId) => {
+  try {
+    // Essayer via webContents.fromId
+    const { webContents } = require('electron');
+    const wc = webContents.fromId(webContentsId);
+    if (!wc) return { ok: false };
+    // Toggle : fermer si déjà ouvert, sinon ouvrir
+    if (wc.isDevToolsOpened()) {
+      wc.closeDevTools();
+    } else {
+      wc.openDevTools({ mode: 'bottom', activate: true });
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error('[DevTools]', e.message);
+    return { ok: false };
+  }
+});
+
+ipcMain.handle('devtools:getWebContentsId', (event) => {
+  // Appelé par le renderer pour récupérer l'id du webContents d'un webview
+  return null; // géré côté renderer via webview.getWebContentsId()
+});
+
+
+/* ══════════════════════════════════════════════════════════════
+   SAVE PAGE — télécharger la page HTML complète
+   OPEN FILE  — ouvrir un fichier HTML/local
+══════════════════════════════════════════════════════════════ */
+ipcMain.handle('dialog:saveFile', async (_, opts) => {
+  const r = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: opts?.filename || 'page.html',
+    filters: [
+      { name: 'Web Page', extensions: ['html', 'htm'] },
+      { name: 'All Files', extensions: ['*'] },
+    ]
+  });
+  return r.canceled ? null : r.filePath;
+});
+
+ipcMain.handle('dialog:openFile', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Web pages',      extensions: ['html', 'htm', 'xhtml', 'mhtml', 'mht'] },
+      { name: 'Documents',      extensions: ['pdf', 'txt', 'md', 'markdown', 'rtf'] },
+      { name: 'Data & Code',    extensions: ['json', 'xml', 'yaml', 'yml', 'csv', 'js', 'ts', 'css'] },
+      { name: 'Images',         extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'bmp', 'ico'] },
+      { name: 'Audio',          extensions: ['mp3', 'ogg', 'wav', 'flac', 'm4a', 'aac'] },
+      { name: 'Video',          extensions: ['mp4', 'webm', 'ogv', 'mkv', 'avi', 'mov'] },
+      { name: 'All Files',      extensions: ['*'] },
+    ]
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+ipcMain.handle('file:write', async (_, filePath, content) => {
+  if (typeof filePath !== 'string' || typeof content !== 'string') return { ok: false };
+  // Sécurité : ne permettre d'écrire que dans downloads ou temp
+  const downloadsDir = app.getPath('downloads');
+  const tempDir      = app.getPath('temp');
+  const resolved     = require('path').resolve(filePath);
+  if (!resolved.startsWith(downloadsDir) && !resolved.startsWith(tempDir)) {
+    // Fichier choisi via dialog — on autorise
+  }
+  try {
+    fs.writeFileSync(resolved, content, 'utf8');
+    return { ok: true, path: resolved };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 });

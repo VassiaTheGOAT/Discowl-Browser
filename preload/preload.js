@@ -97,6 +97,11 @@ contextBridge.exposeInMainWorld('discowlAPI', {
       ipcRenderer.on('window:maximized', (_, v) => cb(v));
     },
   },
+
+  openNewWindow: (url) => ipcRenderer.invoke('window:openNew', url),
+  devtools: {
+    open: (wcId) => ipcRenderer.invoke('devtools:open', wcId),
+  },
   /* ── Password / Lock ─────────────────────────────────────── */
   password: {
     isEnabled: ()      => ipcRenderer.invoke('password:isEnabled'),
@@ -108,7 +113,12 @@ contextBridge.exposeInMainWorld('discowlAPI', {
 
   /* ── Dialog ──────────────────────────────────────────────── */
   dialog: {
-    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
+    openDirectory: ()        => ipcRenderer.invoke('dialog:openDirectory'),
+    saveFile:      (opts)    => ipcRenderer.invoke('dialog:saveFile', opts),
+    openFile:      ()        => ipcRenderer.invoke('dialog:openFile'),
+  },
+  file: {
+    write: (path, content) => ipcRenderer.invoke('file:write', path, content),
   },
 
   /* ── Updates ────────────────────────────────────────────── */

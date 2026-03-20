@@ -151,6 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.DiscowlBrowser = {
   navigate:          (url)   => navigateActive(url),
   getCurrentUrl:     ()      => getActiveTab()?.url   || '',
+  getActiveTab:      ()      => getActiveTab(),
   getCurrentTitle:   ()      => getActiveTab()?.title || '',
   setEngine:         (key)   => setEngine(key),
   setTheme:          (theme) => applyTheme(theme),
@@ -430,7 +431,19 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   });
 
   webview.addEventListener('context-menu', (e) => {
-    // Basic context menu handling could be added here
+    e.preventDefault();
+    // Fermer tous les panels ouverts
+    closeAllPanels();
+    // Afficher le menu contextuel
+    if (window._showContextMenu) {
+      window._showContextMenu(webview, e.params, e.params.x, e.params.y);
+    }
+  });
+
+  // Clic dans la webview → fermer tous les panels
+  webview.addEventListener('mousedown', () => {
+    closeAllPanels();
+    window._hideContextMenu?.();
   });
 
   /* ─── Render tab bar item ────────────────────────────────── */
@@ -441,6 +454,15 @@ function createTab(url = 'about:newtab', isPrivate = false) {
 
   return id;
 }
+
+
+const ICON_PLUS   = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+const ICON_RELOAD = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M10 2A5 5 0 1 0 11 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M8.5.5l2 1.5-1.5 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_MUTE   = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 4h2l3-3v10L3 8H1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4l2 2-2 2M11 4L9 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+const ICON_DUP    = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="1" width="7" height="8" rx="1.2" stroke="currentColor" stroke-width="1.3"/><path d="M1 4v7h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+const ICON_WIN    = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="8" rx="1.2" stroke="currentColor" stroke-width="1.3"/><path d="M1 5h10" stroke="currentColor" stroke-width="1.3"/></svg>`;
+const ICON_CLOSE  = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+const ICON_CLOSE_O= `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 3h10M4 3V2h4v1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M2 3l.8 7h6.4L10 3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
 
 /* ─── Render a single tab bar item ──────────────────────────── */
 function renderTabItem(tab) {
@@ -621,6 +643,51 @@ function renderTabItem(tab) {
     document.addEventListener('mouseup',   onUp);
   });
 
+  // ── Clic droit sur l'onglet (menu contextuel Firefox-style) ──
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeAllPanels();
+
+    const tabCtxItems = [
+      { label: () => i18n.t('ctx.tab_new'),        icon: ICON_PLUS,    action: () => createTab('about:newtab', tab.isPrivate) },
+      { sep: true },
+      { label: () => i18n.t('ctx.tab_reload'),      icon: ICON_RELOAD,  action: () => { if (tab.webview && tab.url) tab.webview.reload(); } },
+      { label: () => i18n.t('ctx.tab_mute'),        icon: ICON_MUTE,    action: () => { /* future */ }, disabled: true },
+      { sep: true },
+      { label: () => i18n.t('ctx.tab_duplicate'),   icon: ICON_DUP,     action: () => { if (tab.url) createTab(tab.url, tab.isPrivate); } },
+      { label: () => i18n.t('ctx.tab_new_window'),  icon: ICON_WIN,     action: () => window.discowlAPI.openNewWindow() },
+      { sep: true },
+      { label: () => i18n.t('ctx.tab_close_others'),icon: ICON_CLOSE_O, action: () => { [...tabs].forEach(t => { if (t.id !== tab.id) closeTab(t.id); }); } },
+      { label: () => i18n.t('ctx.tab_close'),       icon: ICON_CLOSE,   action: () => closeTab(tab.id), danger: true },
+    ];
+
+    // Construire le menu
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    tabCtxItems.forEach(it => {
+      if (it.sep) {
+        const s = document.createElement('div'); s.className = 'ctx-sep'; menu.appendChild(s); return;
+      }
+      const div = document.createElement('div');
+      div.className = 'ctx-item' + (it.disabled ? ' ctx-disabled' : '') + (it.danger ? ' ctx-danger' : '');
+      div.innerHTML = `<span class="ctx-icon">${it.icon}</span><span class="ctx-label">${it.label()}</span>`;
+      if (!it.disabled) div.addEventListener('click', () => { document.body.removeChild(menu); it.action(); });
+      menu.appendChild(div);
+    });
+
+    document.body.appendChild(menu);
+    // Positionnement
+    const r = el.getBoundingClientRect();
+    const mw = 210, mh = menu.scrollHeight;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    menu.style.left = Math.min(e.clientX, vw - mw - 4) + 'px';
+    menu.style.top  = Math.min(r.bottom + 2, vh - mh - 4) + 'px';
+
+    const dismiss = (ev) => { if (!menu.contains(ev.target)) { document.body.contains(menu) && document.body.removeChild(menu); document.removeEventListener('mousedown', dismiss); } };
+    setTimeout(() => document.addEventListener('mousedown', dismiss), 0);
+  });
+
   const container = document.getElementById('tabs-container');
   const newTabBtn  = document.getElementById('new-tab-btn');
   // Insérer avant le bouton + (Firefox-style : + toujours après le dernier onglet)
@@ -767,6 +834,7 @@ function closeTab(id) {
 /* ──────────────────────────────────────────────────────────────
    NAVIGATION
 ────────────────────────────────────────────────────────────── */
+window.navigateActive = navigateActive;
 function navigateActive(url, _fromVirtualBack = false) {
   const tab = getActiveTab();
   if (!tab) return;
@@ -808,7 +876,7 @@ function navigateActive(url, _fromVirtualBack = false) {
 function resolveUrl(input) {
   if (!input || input === 'about:newtab' || input === 'about:blank') return 'about:newtab';
   input = input.trim();
-  if (input.startsWith('about:') || input.startsWith('data:') || input.startsWith('file:')) return input;
+  if (input.startsWith('about:') || input.startsWith('data:') || input.startsWith('file:') || input.startsWith('view-source:')) return input;
   // Detect URL (has protocol OR domain pattern)
   const hasProtocol = /^https?:\/\//i.test(input);
   const looksLikeUrl = /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/|$)/.test(input) && !input.includes(' ');
@@ -1512,6 +1580,140 @@ function initResizeHandles() {
   });
 }
 
+
+/* ── Fermer tous les panels au clic dans la webview ────────── */
+function closeAllPanels() {
+  // Context menu
+  window._hideContextMenu?.();
+  // Sandwich menu
+  closeSandwich();
+  // Menubar dropdowns
+  document.querySelectorAll('.mb-dropdown:not(.hidden)').forEach(d => d.classList.add('hidden'));
+  document.querySelectorAll('.mb-item.open').forEach(d => d.classList.remove('open'));
+  // Dropdown moteur de recherche
+  document.getElementById('engine-dropdown')?.classList.add('hidden');
+  // Downloads panel
+  document.getElementById('downloads-panel')?.classList.add('hidden');
+  // Overlay
+  hideOverlay();
+}
+
+
+/* ── Context menu natif (homepage + hors webview) ─────────── */
+document.addEventListener('contextmenu', (e) => {
+  // ── Toolbar right-click menu ──────────────────────────────
+  const inToolbar = e.target.closest('#toolbar, #tab-bar, #menubar, #bookmarks-toolbar');
+  if (inToolbar) {
+    e.preventDefault();
+    closeAllPanels();
+    showToolbarContextMenu(e.clientX, e.clientY);
+    return;
+  }
+
+  // ── Ignorer panels / menus ouverts ────────────────────────
+  if (e.target.closest('.ctx-menu, .full-panel, .sidebar, #sandwich-menu')) return;
+
+  // ── Context menu webview uniquement sur la zone de contenu ─
+  const inContent = e.target.closest('#webview-container, #new-tab-page');
+  if (!inContent) return;
+
+  // Ignorer si une webview active gère son propre context-menu
+  const activeTab = getActiveTab();
+  if (activeTab && activeTab.url && !activeTab.url.startsWith('about:')) return;
+
+  e.preventDefault();
+  closeAllPanels();
+
+  // Params synthétiques pour la homepage
+  const target = e.target;
+  const sel    = window.getSelection()?.toString()?.trim() || '';
+  const linkEl = target.closest('a[href]');
+  const imgEl  = target.closest('img');
+
+  const syntheticParams = {
+    selectionText: sel,
+    linkURL:       linkEl ? (linkEl.href || '') : '',
+    srcURL:        imgEl  ? (imgEl.src  || '') : '',
+    mediaType:     imgEl  ? 'image' : 'none',
+    isEditable:    target.matches('input, textarea, [contenteditable]'),
+    editFlags:     { canUndo: true, canRedo: true, canCut: !!sel, canCopy: !!sel, canPaste: true },
+    x:             e.clientX,
+    y:             e.clientY,
+  };
+
+  const fakeWv = {
+    getURL:      () => '',
+    goBack:      () => { const t = getActiveTab(); if (t?.webview) t.webview.goBack(); },
+    goForward:   () => { const t = getActiveTab(); if (t?.webview) t.webview.goForward(); },
+    reload:      () => location.reload(),
+    canGoBack:   () => false,
+    canGoForward:() => false,
+    print:       () => window.print(),
+    openDevTools:() => {},
+  };
+
+  window._showContextMenu?.(fakeWv, syntheticParams, e.clientX, e.clientY);
+});
+
+/* ── Toolbar context menu ──────────────────────────────────── */
+function showToolbarContextMenu(x, y) {
+  const existing = document.getElementById('toolbar-ctx-menu');
+  if (existing) existing.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'toolbar-ctx-menu';
+  menu.className = 'ctx-menu';
+  document.body.appendChild(menu);
+
+  function addItem(label, iconSvg, action, disabled) {
+    const el = document.createElement('div');
+    el.className = 'ctx-item' + (disabled ? ' ctx-disabled' : '');
+    el.innerHTML = `<span class="ctx-icon">${iconSvg}</span><span class="ctx-label">${label}</span>`;
+    if (!disabled) el.addEventListener('click', () => { menu.remove(); action(); });
+    menu.appendChild(el);
+  }
+  function addSep() {
+    const s = document.createElement('div'); s.className = 'ctx-sep'; menu.appendChild(s);
+  }
+
+  const ICON_CUSTOMIZE = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 4h10M2 7h7M2 10h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="11" cy="10" r="2" stroke="currentColor" stroke-width="1.4"/></svg>`;
+  const ICON_NEWTAB    = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+  const ICON_BM_BAR    = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h10v8l-5-2-5 2V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+  const ICON_FULLSCR   = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const ICON_ZOOM_R    = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M4.5 6.5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+
+  addItem(i18n.t('ctx.toolbar_new_tab'),    ICON_NEWTAB,  () => createTab('about:newtab', false));
+  addItem(i18n.t('ctx.toolbar_new_window'), ICON_NEWTAB,  () => window.discowlAPI.openNewWindow());
+  addSep();
+  addItem(i18n.t('ctx.toolbar_customize'),  ICON_CUSTOMIZE, () => _openCustomizeTab());
+  addItem(i18n.t('ctx.toolbar_bm_bar'),     ICON_BM_BAR,
+    () => {
+      const show = !settings.showBookmarksToolbar;
+      window.discowlAPI.settings.save({ showBookmarksToolbar: show });
+      document.getElementById('bookmarks-toolbar').style.display = show ? 'flex' : 'none';
+      settings.showBookmarksToolbar = show;
+    }
+  );
+  addSep();
+  addItem(i18n.t('ctx.toolbar_zoom_reset'), ICON_ZOOM_R, () => zoomActive(0, true));
+  addSep();
+  addItem(i18n.t('ctx.toolbar_fullscreen'), ICON_FULLSCR, () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  });
+
+  // Position
+  const mw = 230;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  menu.style.left = Math.min(x, vw - mw - 6) + 'px';
+  menu.style.top  = Math.min(y, vh - menu.scrollHeight - 6) + 'px';
+
+  const dismiss = (ev) => {
+    if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('mousedown', dismiss); }
+  };
+  setTimeout(() => document.addEventListener('mousedown', dismiss), 0);
+}
+
 function initMenubar() {
   let openItem = null;
 
@@ -1572,9 +1774,35 @@ function initMenubar() {
 
   // File
   mb('new-tab',          () => createTab('about:newtab', false));
+  mb('new-window',       () => window.discowlAPI.openNewWindow());
   mb('new-private',      () => createTab('about:newtab', true));
   mb('open-url',         () => document.getElementById('url-bar')?.focus());
-  mb('save-page',        () => getActiveTab()?.webview?.downloadURL(getActiveTab()?.url));
+  mb('save-page', async () => {
+    const tab = getActiveTab();
+    if (!tab?.webview || !tab.url || tab.url.startsWith('about:')) return;
+    // Récupérer le HTML de la page
+    try {
+      const html = await tab.webview.executeJavaScript('document.documentElement.outerHTML');
+      // Nom de fichier basé sur le titre de la page
+      const safeName = (tab.title || 'page').replace(/[<>:"/\\|?*]/g, '_').slice(0, 60) + '.html';
+      const dest = await window.discowlAPI.dialog.saveFile({ filename: safeName });
+      if (dest) {
+        const r = await window.discowlAPI.file.write(dest, html);
+        if (r.ok) showToast(i18n.t('toast.page_saved'), 'success');
+        else showToast(i18n.t('toast.page_save_error'), 'error');
+      }
+    } catch (e) {
+      showToast(i18n.t('toast.page_save_error'), 'error');
+    }
+  });
+  mb('open-file', async () => {
+    const p = await window.discowlAPI.dialog.openFile();
+    if (p) {
+      // Windows paths need forward slashes + proper encoding
+      const url = 'file:///' + p.replace(/\\/g, '/');
+      createTab(url);
+    }
+  });
   mb('print',            () => getActiveTab()?.webview?.print?.());
   mb('quit',             () => window.close());
 
@@ -1603,6 +1831,14 @@ function initMenubar() {
     if (bar) bar.classList.toggle('hidden');
   });
   mb('devtools',         () => getActiveTab()?.webview?.openDevTools());
+
+  // Exposed for context-menu.js
+  window._openDevTools = () => {
+    const tab = getActiveTab();
+    if (tab?.webview && tab.url && !tab.url.startsWith('about:')) {
+      tab.webview.openDevTools();
+    }
+  };
 
   // History
   mb('back',             () => document.getElementById('back-btn')?.click());
@@ -1718,8 +1954,10 @@ function setupKeyboardShortcuts() {
 
     if (ctrl && e.key === 't') { e.preventDefault(); createTab('about:newtab', false); }
     if (ctrl && e.shiftKey && e.key === 'T') { e.preventDefault(); createTab('about:newtab', true); }
+    if (ctrl && e.shiftKey && e.key === 'N') { e.preventDefault(); window.discowlAPI.openNewWindow(); }
     if (ctrl && e.key === 'w') { e.preventDefault(); closeTab(activeTabId); }
     if (ctrl && e.key === 'l') { e.preventDefault(); document.getElementById('url-bar').focus(); }
+    if (ctrl && e.key === 'o') { e.preventDefault(); window.discowlAPI.dialog.openFile().then(p => { if (p) createTab('file:///' + p.replace(/\\/g, '/')); }); }
     if (ctrl && e.key === 'b') { e.preventDefault(); window.SidebarManager?.toggleLeft(); }
     if (ctrl && e.key === 'h') { e.preventDefault(); window.SidebarManager?.toggleRight(); }
     if (ctrl && e.key === 'r' || e.key === 'F5') { e.preventDefault(); getActiveTab()?.webview.reload(); }
@@ -1948,6 +2186,7 @@ async function updateTorIndicator() {
    HELPERS
 ══════════════════════════════════════════════════════════════ */
 function getTab(id)   { return tabs.find(t => t.id === id) || null; }
+window.getActiveTab = getActiveTab;
 function getActiveTab() { return getTab(activeTabId); }
 
 /* ══════════════════════════════════════════════════════════════

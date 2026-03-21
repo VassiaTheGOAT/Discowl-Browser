@@ -6,6 +6,7 @@ const fs   = require('fs');
 const os   = require('os');
 
 const TorManager      = require('./torManager');
+const privacyManager  = require('./privacyManager');
 
 const passwordManager = require('./passwordManager');
 const vaultManager    = require('./vaultManager');
@@ -107,9 +108,16 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 Menu.setApplicationMenu(null);
 
 if (earlySettings.torEnabled) {
-  console.log('[Main] torEnabled détecté avant ready → proxy Chromium configuré');
+  console.log('[Main] torEnabled → proxy + WebRTC + DNS configurés');
+  // Proxy global — couvre TOUT Chromium, webviews incluses
   app.commandLine.appendSwitch('proxy-server', 'socks5://127.0.0.1:9050');
   app.commandLine.appendSwitch('proxy-bypass-list', '<local>');
+  // WebRTC désactivé — empêche fuites IP réelle
+  app.commandLine.appendSwitch('disable-webrtc');
+  // Désactiver le cache GPU (fingerprint via timing)
+  app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+  // Désactiver les connexions réseau en arrière-plan
+  app.commandLine.appendSwitch('disable-background-networking');
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -137,6 +145,9 @@ app.whenReady().then(async () => {
   }
   nativeTheme.themeSource = settings.theme === 'dark' ? 'dark' : 'light';
 
+  // Initialiser le gestionnaire de confidentialité
+  privacyManager.initialize(settings, torManager);
+
   // Enregistrer les IPC update (check manuel depuis Settings)
   registerUpdaterIpc();
 
@@ -156,6 +167,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async () => {
+  await privacyManager.clearAllSensitiveData();
   if (torManager) await torManager.stopTor();
   if (process.platform !== 'darwin') app.quit();
 });
@@ -377,23 +389,11 @@ ipcMain.handle('settings:save', async (_, newSettings) => {
     'blockAds','doNotTrack','saveCookies','toolbarItems','customTitlebar',
     'blockTrackers','httpsUpgrade','strictReferrer','blockWebRTC',
     'clearOnExit','doh','blockFingerprinting','blockThirdPartyCookies',
-    'blockYoutubeAds','privacyLevel','proxy','ntpBackground',
+    'blockYoutubeAds','privacyLevel','proxy',
   ]);
   const safe = {};
   for (const [k, v] of Object.entries(newSettings)) {
-    if (!ALLOWED_KEYS.has(k)) continue;
-    // Validation spéciale pour ntpBackground
-    if (k === 'ntpBackground') {
-      if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
-      const VALID_TYPES = new Set(['none','color','image']);
-      if (!VALID_TYPES.has(v.type)) continue;
-      if (typeof v.value !== 'string') continue;
-      // Limiter la taille (une image base64 peut être grande mais raisonnable)
-      if (v.value.length > 5 * 1024 * 1024) continue; // 5MB max
-      safe[k] = { type: v.type, value: v.value };
-      continue;
-    }
-    safe[k] = v;
+    if (ALLOWED_KEYS.has(k)) safe[k] = v;
   }
   const old = storage.getSettings();
   storage.saveSettings(safe);
@@ -409,13 +409,28 @@ ipcMain.handle('settings:save', async (_, newSettings) => {
    Ces handlers permettent juste d'interroger l'état en live.
 ══════════════════════════════════════════════════════════════ */
 ipcMain.handle('tor:status', () => ({
-  running:   torManager.isTorRunning(),
-  proxyUrl:  torManager.getTorProxyUrl(),
-  binExists: fs.existsSync(torManager.torBinPath),
-  binPath:   torManager.torBinPath,
-  // Indique si le proxy Chromium est actif (= commandLine switch présent)
-  proxyActive: !!earlySettings.torEnabled
+  ...torManager.getStatus(),
+  binPath:     torManager.torBinPath,
+  proxyActive: !!earlySettings.torEnabled,
 }));
+
+ipcMain.handle('tor:newCircuit', async () => {
+  const result = await torManager.rotateCircuit();
+  if (result.ok) {
+    BrowserWindow.getAllWindows().forEach(w => {
+      if (!w.isDestroyed()) w.webContents.send('tor:circuit-rotated', { circuitId: result.circuitId });
+    });
+  }
+  return result;
+});
+
+ipcMain.handle('tor:verify', async () => {
+  return torManager.verifyTorConnectivity();
+});
+
+ipcMain.handle('tor:getStats', () => {
+  return privacyManager.getStats();
+});
 
 /* ══════════════════════════════════════════════════════════════
    IPC — Système
@@ -710,26 +725,4 @@ ipcMain.handle('file:write', async (_, filePath, content) => {
   }
 });
 
-/* ══════════════════════════════════════════════════════════════
-   PERMISSIONS — bloquer les accès dangereux des pages web
-══════════════════════════════════════════════════════════════ */
-app.whenReady().then(() => {
-  // Pour toutes les sessions (default + persist:main + persist:private)
-  function applyPermissionHandler(sess) {
-    sess.setPermissionRequestHandler((webContents, permission, callback) => {
-      // Permissions autorisées
-      const ALLOWED = ['clipboard-read', 'clipboard-write', 'fullscreen'];
-      if (ALLOWED.includes(permission)) { callback(true); return; }
-      // Tout le reste est bloqué : notifications, geolocation, camera, microphone, etc.
-      console.log('[Security] Permission refusée:', permission);
-      callback(false);
-    });
-    sess.setPermissionCheckHandler((webContents, permission) => {
-      const ALLOWED = ['clipboard-read', 'clipboard-write', 'fullscreen'];
-      return ALLOWED.includes(permission);
-    });
-  }
-  applyPermissionHandler(session.defaultSession);
-  applyPermissionHandler(session.fromPartition('persist:main'));
-  applyPermissionHandler(session.fromPartition('persist:private'));
-});
+// Permissions + sessions gérées par privacyManager.initialize()

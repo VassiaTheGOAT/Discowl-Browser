@@ -2,7 +2,7 @@
 /* ═══════════════════════════════════════════════════════════════
    Discowl i18n — fichier unique, aucun patch, aucun chaînage.
    ═══════════════════════════════════════════════════════════════ */
- 
+
 const T = {
 en: {
   'menu.file':'File','menu.edit':'Edit','menu.view':'View','menu.history':'History','menu.bookmarks':'Bookmarks','menu.help':'Help',
@@ -160,7 +160,7 @@ en: {
   'ctx.print':            'Print…',
   'ctx.view_source':      'View page source',
   'ctx.inspect':          'Inspect',
- 
+
 },
 fr: {
   'menu.file':'Fichier','menu.edit':'\u00c9dition','menu.view':'Affichage','menu.history':'Historique','menu.bookmarks':'Favoris','menu.help':'Aide',
@@ -295,7 +295,7 @@ fr: {
   'toast.password_save_error':'Impossible d\'enregistrer le mot de passe',
 },
 };
- 
+
 // Add es, de, it as copies of en with key overrides for brevity
 // Full translations for major strings
 const LANG_EXTRA = {
@@ -330,16 +330,16 @@ it: {'menu.file':'File','menu.edit':'Modifica','menu.view':'Visualizza','menu.hi
   'ctx.view_source':'Visualizza sorgente','ctx.inspect':'Ispeziona',
 },
 };
- 
+
 // Merge LANG_EXTRA into T
 Object.entries(LANG_EXTRA).forEach(([lang, keys]) => {
   T[lang] = Object.assign({}, T.en, keys);
 });
- 
+
 /* ═══════════════════════════════════════════════════════════════
    Moteur — unique, propre, aucun patch
    ═══════════════════════════════════════════════════════════════ */
- 
+
 // ── Inject extra keys directly into T ───────────────────────
 const T_EXTRA = {
   en: {
@@ -396,8 +396,8 @@ const T_EXTRA = {
 Object.entries(T_EXTRA).forEach(([lang, keys]) => {
   if (T[lang]) Object.assign(T[lang], keys);
 });
- 
- 
+
+
 // Toolbar context menu keys
 const T_TOOLBAR = {
   en: { 'ctx.toolbar_new_tab':'New Tab','ctx.toolbar_new_window':'New Window','ctx.toolbar_customize':'Customize toolbar…','ctx.toolbar_bm_bar':'Toggle bookmarks bar','ctx.toolbar_zoom_reset':'Reset zoom','ctx.toolbar_fullscreen':'Toggle fullscreen' },
@@ -407,8 +407,8 @@ const T_TOOLBAR = {
   it: { 'ctx.toolbar_new_tab':'Nuova scheda','ctx.toolbar_new_window':'Nuova finestra','ctx.toolbar_customize':'Personalizza barra…','ctx.toolbar_bm_bar':'Mostra/nascondi barra segnalibri','ctx.toolbar_zoom_reset':'Reimposta zoom','ctx.toolbar_fullscreen':'Schermo intero' },
 };
 Object.entries(T_TOOLBAR).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
- 
- 
+
+
 // ── NTP Background customize keys ──────────────────────────
 const T_NTP = {
   en: {
@@ -502,20 +502,76 @@ const T_NTP = {
   },
 };
 Object.entries(T_NTP).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
- 
+
+
+// ── Tor UI keys ──────────────────────────────────────────────
+const T_TOR = {
+  en: {
+    'tor.connecting':       'Tor — Connecting…',
+    'tor.connected':        'Tor — Connected',
+    'tor.rotating':         'Tor — New circuit…',
+    'tor.error':            'Tor — Error',
+    'tor.circuit':          'Circuit',
+    'tor.new_circuit_tip':  'Request a new Tor circuit',
+    'tor.new_circuit_ok':   'New circuit established',
+    'tor.new_circuit_error':'Circuit rotation failed',
+  },
+  fr: {
+    'tor.connecting':       'Tor — Connexion…',
+    'tor.connected':        'Tor — Connecté',
+    'tor.rotating':         'Tor — Nouveau circuit…',
+    'tor.error':            'Tor — Erreur',
+    'tor.circuit':          'Circuit',
+    'tor.new_circuit_tip':  'Demander un nouveau circuit Tor',
+    'tor.new_circuit_ok':   'Nouveau circuit établi',
+    'tor.new_circuit_error':'Rotation de circuit échouée',
+  },
+  es: {
+    'tor.connecting':       'Tor — Conectando…',
+    'tor.connected':        'Tor — Conectado',
+    'tor.rotating':         'Tor — Nuevo circuito…',
+    'tor.error':            'Tor — Error',
+    'tor.circuit':          'Circuito',
+    'tor.new_circuit_tip':  'Solicitar nuevo circuito Tor',
+    'tor.new_circuit_ok':   'Nuevo circuito establecido',
+    'tor.new_circuit_error':'Error al rotar circuito',
+  },
+  de: {
+    'tor.connecting':       'Tor — Verbinde…',
+    'tor.connected':        'Tor — Verbunden',
+    'tor.rotating':         'Tor — Neue Route…',
+    'tor.error':            'Tor — Fehler',
+    'tor.circuit':          'Route',
+    'tor.new_circuit_tip':  'Neue Tor-Route anfordern',
+    'tor.new_circuit_ok':   'Neue Route hergestellt',
+    'tor.new_circuit_error':'Routenwechsel fehlgeschlagen',
+  },
+  it: {
+    'tor.connecting':       'Tor — Connessione…',
+    'tor.connected':        'Tor — Connesso',
+    'tor.rotating':         'Tor — Nuovo circuito…',
+    'tor.error':            'Tor — Errore',
+    'tor.circuit':          'Circuito',
+    'tor.new_circuit_tip':  'Richiedi nuovo circuito Tor',
+    'tor.new_circuit_ok':   'Nuovo circuito stabilito',
+    'tor.new_circuit_error':'Rotazione circuito fallita',
+  },
+};
+Object.entries(T_TOR).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
+
 const i18n = (() => {
   let _lang = 'en';
- 
+
   function setLang(lang) { _lang = T[lang] ? lang : 'en'; }
   function getLang()     { return _lang; }
   function getAvailable(){ return Object.keys(T); }
- 
+
   function t(key, vars) {
     let str = T[_lang]?.[key] ?? T.en?.[key] ?? key;
     if (vars) Object.entries(vars).forEach(([k,v]) => { str = str.replace(`{${k}}`, v); });
     return str;
   }
- 
+
   function apply(root) {
     const r = root || document;
     r.querySelectorAll('[data-i18n]').forEach(el => {
@@ -535,9 +591,9 @@ const i18n = (() => {
     r.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
     r.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   }
- 
+
   return { setLang, getLang, getAvailable, t, apply };
 })();
- 
+
 window.i18n = i18n;
 console.log('[i18n] loaded, ctx.toolbar_new_tab=', i18n.t('ctx.toolbar_new_tab'), 'tab_new=', i18n.t('ctx.tab_new'));

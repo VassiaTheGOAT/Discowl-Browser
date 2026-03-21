@@ -41,7 +41,10 @@ contextBridge.exposeInMainWorld('discowlAPI', {
 
   /* ── Tor ─────────────────────────────────────────────────── */
   tor: {
+    start:  () => ipcRenderer.invoke('tor:start'),
+    stop:   () => ipcRenderer.invoke('tor:stop'),
     status: () => ipcRenderer.invoke('tor:status'),
+    check:  () => ipcRenderer.invoke('tor:check')
   },
 
   /* ── Shell ───────────────────────────────────────────────── */
@@ -95,7 +98,7 @@ contextBridge.exposeInMainWorld('discowlAPI', {
     },
   },
 
-  openNewWindow: (url) => ipcRenderer.invoke('window:openNew', typeof url === 'string' ? url : undefined),
+  openNewWindow: (url) => ipcRenderer.invoke('window:openNew', url),
   devtools: {
     open: (wcId) => ipcRenderer.invoke('devtools:open', wcId),
   },
@@ -110,12 +113,7 @@ contextBridge.exposeInMainWorld('discowlAPI', {
 
   /* ── Dialog ──────────────────────────────────────────────── */
   dialog: {
-    openDirectory: ()        => ipcRenderer.invoke('dialog:openDirectory'),
-    saveFile:      (opts)    => ipcRenderer.invoke('dialog:saveFile', opts),
-    openFile:      ()        => ipcRenderer.invoke('dialog:openFile'),
-  },
-  file: {
-    write: (filePath, content) => ipcRenderer.invoke('file:write', filePath, content),
+    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
   },
 
   /* ── Updates ────────────────────────────────────────────── */

@@ -123,6 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initVaultBanners();
     initCustomTitlebar();
     initNtpBackground();
+    initTorUI();
 
     // Appliquer les traductions sur tout le DOM statique
     if (window.i18n) window.i18n.apply();
@@ -1715,6 +1716,136 @@ function showToolbarContextMenu(x, y) {
     if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('mousedown', dismiss); }
   };
   setTimeout(() => document.addEventListener('mousedown', dismiss), 0);
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   TOR UI — indicateur d'état + bouton New Circuit
+══════════════════════════════════════════════════════════════ */
+function initTorUI() {
+  if (!settings.torEnabled) return;
+
+  const indicator = document.getElementById('tor-indicator');
+  if (!indicator) return;
+  indicator.classList.remove('hidden');
+
+  let _circuitId    = 0;
+  let _newnymTimer  = null;
+  let _checkInterval= null;
+
+  function setTorState(state) {
+    indicator.dataset.state = state;
+    const label   = indicator.querySelector('.tor-label');
+    const spinner = indicator.querySelector('.tor-spinner');
+    const dot     = indicator.querySelector('.tor-dot');
+    const newBtn  = document.getElementById('tor-new-circuit');
+
+    switch (state) {
+      case 'connecting':
+        if (label)   label.textContent = i18n.t('tor.connecting');
+        if (dot)     dot.className = 'tor-dot tor-dot-yellow';
+        if (spinner) spinner.classList.remove('hidden');
+        if (newBtn)  newBtn.disabled = true;
+        break;
+      case 'connected':
+        if (label)   label.textContent = i18n.t('tor.connected');
+        if (dot)     dot.className = 'tor-dot tor-dot-green';
+        if (spinner) spinner.classList.add('hidden');
+        if (newBtn)  newBtn.disabled = false;
+        break;
+      case 'rotating':
+        if (label)   label.textContent = i18n.t('tor.rotating');
+        if (dot)     dot.className = 'tor-dot tor-dot-yellow';
+        if (spinner) spinner.classList.remove('hidden');
+        if (newBtn)  newBtn.disabled = true;
+        break;
+      case 'error':
+        if (label)   label.textContent = i18n.t('tor.error');
+        if (dot)     dot.className = 'tor-dot tor-dot-red';
+        if (spinner) spinner.classList.add('hidden');
+        if (newBtn)  newBtn.disabled = true;
+        break;
+    }
+  }
+
+  function updateCircuitLabel() {
+    const el = document.getElementById('tor-circuit-label');
+    if (el) el.textContent = '#' + _circuitId;
+  }
+
+  function updateNewnymCooldown(newnymIn) {
+    const btn      = document.getElementById('tor-new-circuit');
+    const progress = document.getElementById('tor-newnym-progress');
+    if (!btn) return;
+    btn.disabled = true;
+    if (progress) {
+      progress.classList.remove('hidden');
+      progress.style.width = '0%';
+      // Animation vers 100% sur la durée du cooldown
+      requestAnimationFrame(() => { progress.style.transition = `width ${newnymIn}ms linear`; progress.style.width = '100%'; });
+    }
+    clearTimeout(_newnymTimer);
+    _newnymTimer = setTimeout(() => {
+      btn.disabled = false;
+      if (progress) { progress.classList.add('hidden'); progress.style.width = '0'; progress.style.transition = ''; }
+    }, newnymIn);
+  }
+
+  async function checkStatus() {
+    try {
+      const s = await window.discowlAPI.tor.status();
+      if (s.bootstrapped) {
+        setTorState('connected');
+        if (s.circuitId !== _circuitId) { _circuitId = s.circuitId; updateCircuitLabel(); }
+        if (!s.newnymReady) {
+          const btn = document.getElementById('tor-new-circuit');
+          if (btn && !btn.disabled) updateNewnymCooldown(s.newnymIn || 10000);
+        }
+      } else if (s.running) {
+        setTorState('connecting');
+      } else {
+        setTorState('error');
+      }
+    } catch { setTorState('error'); }
+  }
+
+  // Bouton New Circuit
+  document.getElementById('tor-new-circuit')?.addEventListener('click', async () => {
+    setTorState('rotating');
+    try {
+      const r = await window.discowlAPI.tor.newCircuit();
+      if (r.ok) {
+        _circuitId = r.circuitId;
+        updateCircuitLabel();
+        showToast(i18n.t('tor.new_circuit_ok'), 'success');
+        setTorState('connected');
+        updateNewnymCooldown(10000);
+      } else {
+        showToast(i18n.t('tor.new_circuit_error') + (r.reason ? ` (${r.reason})` : ''), 'error');
+        setTorState('connected');
+        if (r.ms_until_available > 0) updateNewnymCooldown(r.ms_until_available);
+      }
+    } catch {
+      showToast(i18n.t('tor.new_circuit_error'), 'error');
+      setTorState('connected');
+    }
+  });
+
+  // Écouter les rotations external
+  window.discowlAPI.tor.onCircuitRotated?.(({ circuitId }) => {
+    _circuitId = circuitId;
+    updateCircuitLabel();
+  });
+
+  // Vérification initiale + périodique (15s)
+  setTorState('connecting');
+  checkStatus();
+  _checkInterval = setInterval(checkStatus, 15000);
+
+  window.addEventListener('beforeunload', () => {
+    clearInterval(_checkInterval);
+    clearTimeout(_newnymTimer);
+  });
 }
 
 function initMenubar() {

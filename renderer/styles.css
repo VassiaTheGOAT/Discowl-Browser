@@ -2724,7 +2724,7 @@ body.window-maximized .rz { display: none; }
   user-select: none;
 }
 .ctx-menu.hidden { display: none !important; }
- 
+
 .ctx-item {
   display: flex;
   align-items: center;
@@ -2742,7 +2742,7 @@ body.window-maximized .rz { display: none; }
   cursor: default;
   pointer-events: none;
 }
- 
+
 .ctx-icon {
   width: 16px;
   height: 16px;
@@ -2753,30 +2753,30 @@ body.window-maximized .rz { display: none; }
   flex-shrink: 0;
 }
 .ctx-item:hover .ctx-icon { color: var(--text-primary); }
- 
+
 .ctx-label { flex: 1; white-space: nowrap; }
- 
+
 .ctx-shortcut {
   font-size: 11px;
   color: var(--text-muted);
   margin-left: 16px;
   flex-shrink: 0;
 }
- 
+
 .ctx-sep {
   height: 1px;
   background: var(--border);
   margin: 3px 6px;
 }
- 
+
 .ctx-item.ctx-danger { color: #f87171; }
 .ctx-item.ctx-danger:hover { background: rgba(248,113,113,.12); color: #f87171; }
 .ctx-item.ctx-danger .ctx-icon { color: #f87171; }
- 
+
 /* ══════════════════════════════════════════════════════════════
    HOMEPAGE — BOUTON + DOCK PERSONNALISATION FOND
 ══════════════════════════════════════════════════════════════ */
- 
+
 /* ── Fond d'écran homepage (prioritaire sur tous les modes) ── */
 .newtab-page[style*="--ntp-bg-image"] {
   background-image: var(--ntp-bg-image) !important;
@@ -2787,7 +2787,7 @@ body.window-maximized .rz { display: none; }
 .newtab-page[style*="--ntp-bg-color"] {
   background-color: var(--ntp-bg-color) !important;
 }
- 
+
 /* ── Bouton "Customize" — bas droite, discret ── */
 .ntp-bg-btn {
   position: absolute;
@@ -2822,10 +2822,10 @@ body.window-maximized .rz { display: none; }
   box-shadow: 0 4px 18px rgba(0,0,0,.55);
 }
 .ntp-bg-btn svg { flex-shrink: 0; opacity: .85; }
- 
+
 /* Pas de surcharge theme-light — fond sombre forcé dans tous les cas
    pour rester lisible sur fond blanc, image claire, ou couleur custom */
- 
+
 /* ── Dock ── */
 .ntp-bg-dock {
   position: absolute;
@@ -2839,7 +2839,7 @@ body.window-maximized .rz { display: none; }
   z-index: 20;
   overflow: hidden;
   -webkit-app-region: no-drag;
- 
+
   transform: translateY(10px);
   opacity: 0;
   pointer-events: none;
@@ -2851,7 +2851,7 @@ body.window-maximized .rz { display: none; }
   pointer-events: all;
 }
 .ntp-bg-dock.hidden { display: none; }
- 
+
 /* Header */
 .ntp-dock-header {
   display: flex;
@@ -2881,12 +2881,12 @@ body.window-maximized .rz { display: none; }
   transition: background .12s, color .12s;
 }
 .ntp-dock-close:hover { background: var(--bg-hover); color: var(--text-primary); }
- 
+
 /* Body */
 .ntp-dock-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 14px; }
- 
+
 .ntp-dock-section { display: flex; flex-direction: column; gap: 8px; }
- 
+
 .ntp-dock-label {
   font-size: 10px;
   font-weight: 600;
@@ -2894,9 +2894,9 @@ body.window-maximized .rz { display: none; }
   text-transform: uppercase;
   color: var(--text-muted);
 }
- 
+
 .ntp-dock-divider { height: 1px; background: var(--border); margin: 0 -14px; }
- 
+
 /* Swatches */
 .ntp-colors {
   display: flex;
@@ -2913,7 +2913,7 @@ body.window-maximized .rz { display: none; }
 }
 .ntp-swatch:hover { transform: scale(1.15); }
 .ntp-swatch.active { border-color: var(--accent); }
- 
+
 .ntp-swatch-default {
   background: conic-gradient(
     #0f1117 0% 25%, #f8f8f2 25% 50%, #0f1117 50% 75%, #f8f8f2 75% 100%
@@ -2931,7 +2931,7 @@ body.window-maximized .rz { display: none; }
 }
 .ntp-swatch-picker:hover { background: var(--bg-active); color: var(--text-primary); }
 .ntp-swatch-picker input { position: absolute; opacity: 0; width: 0; height: 0; }
- 
+
 /* Boutons image */
 .ntp-img-row { display: flex; gap: 6px; }
 .ntp-img-btn {
@@ -2951,7 +2951,7 @@ body.window-maximized .rz { display: none; }
 .ntp-img-btn.hidden { display: none; }
 .ntp-img-remove { color: #f87171; border-color: rgba(248,113,113,.3); }
 .ntp-img-remove:hover { background: rgba(248,113,113,.1); border-color: #f87171; color: #f87171; }
- 
+
 /* URL row */
 .ntp-url-row {
   display: flex; gap: 6px; align-items: center;
@@ -2979,7 +2979,7 @@ body.window-maximized .rz { display: none; }
   transition: filter .12s;
 }
 .ntp-url-apply:hover { filter: brightness(1.1); }
- 
+
 /* Preview */
 .ntp-img-preview {
   display: flex; align-items: center; gap: 8px;
@@ -2997,3 +2997,138 @@ body.window-maximized .rz { display: none; }
   flex-shrink: 0;
 }
 .ntp-img-info { font-size: 10px; color: var(--text-muted); line-height: 1.4; }
+
+/* ══════════════════════════════════════════════════════════════
+   TOR INDICATOR — barre de navigation
+══════════════════════════════════════════════════════════════ */
+
+.tor-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(139, 92, 246, .12);
+  border: 1px solid rgba(139, 92, 246, .28);
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #a78bfa;
+  user-select: none;
+  position: relative;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+  transition: background .2s, border-color .2s, color .2s;
+}
+.tor-indicator.hidden { display: none !important; }
+
+/* États */
+.tor-indicator[data-state="connected"] {
+  background: rgba(52, 211, 153, .1);
+  border-color: rgba(52, 211, 153, .28);
+  color: #34d399;
+}
+.tor-indicator[data-state="error"] {
+  background: rgba(239, 68, 68, .1);
+  border-color: rgba(239, 68, 68, .28);
+  color: #f87171;
+}
+.tor-indicator[data-state="rotating"],
+.tor-indicator[data-state="connecting"] {
+  background: rgba(251, 191, 36, .1);
+  border-color: rgba(251, 191, 36, .28);
+  color: #fbbf24;
+}
+
+/* Point d'état */
+.tor-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background .2s, box-shadow .2s;
+}
+.tor-dot-green {
+  background: #34d399;
+  box-shadow: 0 0 6px rgba(52,211,153,.6);
+}
+.tor-dot-yellow {
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251,191,36,.5);
+  animation: tor-pulse 1.2s ease-in-out infinite;
+}
+.tor-dot-red {
+  background: #f87171;
+  box-shadow: 0 0 5px rgba(248,113,113,.5);
+}
+
+@keyframes tor-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .5; transform: scale(.85); }
+}
+
+/* Spinner */
+.tor-spinner {
+  width: 11px; height: 11px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: tor-spin .7s linear infinite;
+  flex-shrink: 0;
+}
+.tor-spinner.hidden { display: none; }
+@keyframes tor-spin { to { transform: rotate(360deg); } }
+
+/* Label */
+.tor-label {
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+/* Circuit number */
+.tor-circuit {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  opacity: .7;
+  white-space: nowrap;
+}
+
+/* Bouton new circuit */
+.tor-new-circuit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; height: 20px;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: inherit;
+  cursor: pointer;
+  opacity: .75;
+  transition: opacity .12s, background .12s;
+  padding: 0;
+  flex-shrink: 0;
+}
+.tor-new-circuit-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255,255,255,.12);
+}
+.tor-new-circuit-btn:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+
+/* Barre de cooldown (en bas de l'indicateur) */
+.tor-newnym-progress {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: currentColor;
+  border-radius: 0 0 14px 14px;
+  width: 0%;
+  opacity: .45;
+}
+.tor-newnym-progress.hidden { display: none; }

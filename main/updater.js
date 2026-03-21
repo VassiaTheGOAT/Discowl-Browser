@@ -27,6 +27,18 @@ const { BrowserWindow, ipcMain, app } = require('electron');
 const path  = require('path');
 const log   = require('./updateLogger');
 
+// Compare deux versions semver — retourne true si b > a STRICTEMENT
+function _isNewer(a, b) {
+  const pa = String(a).replace(/^v/, '').split('.').map(Number);
+  const pb = String(b).replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (nb > na) return true;
+    if (nb < na) return false;
+  }
+  return false; // égaux → pas de mise à jour
+}
+
 /* ══════════════════════════════════════════════════════════════
    CONFIGURATION electron-updater
 ══════════════════════════════════════════════════════════════ */
@@ -34,6 +46,22 @@ const log   = require('./updateLogger');
 function configureUpdater() {
   // Brancher le logger dédié
   autoUpdater.logger = log;
+
+  // Purger le cache updater au démarrage pour éviter la boucle infinie.
+  // electron-updater garde le .exe téléchargé dans userData/pending/.
+  // Au redémarrage post-install, il le trouve et re-déclenche update-downloaded.
+  try {
+    const pendingDir = path.join(app.getPath('userData'), '..', 'discowl-browser-updater', 'pending');
+    const altDir     = path.join(app.getPath('userData'), 'pending');
+    for (const dir of [pendingDir, altDir]) {
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        log.info('[Updater] Cache pending supprimé:', dir);
+      }
+    }
+  } catch (e) {
+    log.warn('[Updater] Impossible de purger le cache:', e.message);
+  }
 
   // Désactiver le téléchargement automatique :
   // on gère la progression manuellement pour l'afficher dans le splash
@@ -155,6 +183,19 @@ function _bindStartupEvents(networkTimeout) {
   function onAvailable(info) {
     clearTimeout(networkTimeout);
     log.info('[Updater] Mise à jour disponible —', info.version);
+
+    // Vérification anti-boucle : la version disponible doit être
+    // STRICTEMENT supérieure à la version courante installée.
+    const current = app.getVersion().replace(/^v/, '');
+    const available = (info.version || '').replace(/^v/, '');
+    if (!_isNewer(current, available)) {
+      log.info('[Updater] Version disponible', available, '<= version courante', current, '— skip');
+      sendToSplash('not-available');
+      closeSplashAndLaunch(700);
+      cleanup();
+      return;
+    }
+
     sendToSplash('available', { version: info.version, releaseNotes: info.releaseNotes });
 
     // Démarrer le téléchargement
@@ -378,6 +419,16 @@ function registerIpc(getMainWindow) {
 
       function onAvailable(info) {
         if (resolved) return;
+        const cur = app.getVersion().replace(/^v/, '');
+        const avail = (info.version || '').replace(/^v/, '');
+        if (!_isNewer(cur, avail)) {
+          // Anti-boucle : déjà à jour
+          resolved = true;
+          clearTimeout(timeout);
+          cleanup();
+          resolve({ upToDate: true, current: app.getVersion() });
+          return;
+        }
         resolved = true;
         clearTimeout(timeout);
         cleanup();

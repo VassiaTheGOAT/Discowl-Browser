@@ -1,41 +1,51 @@
 # installer.nsh — Discowl Browser
-# Règle : première installation → créer les raccourcis
-#         mise à jour          → ne JAMAIS toucher aux raccourcis
+#
+# Cas 1 : Première installation
+#         → créer les raccourcis bureau + Start Menu avec l'icône correcte
+#         → écrire la clé registre pour les prochaines fois
+#
+# Cas 2 : Mise à jour via electron-updater (/S silent)
+#         → customRemoveFiles est vide : aucun raccourci supprimé
+#         → customInstall détecte la clé registre → ne recrée RIEN
+#         → résultat : icônes intactes, barre des tâches intacte
+#
+# Cas 3 : Désinstallation manuelle
+#         → supprimer raccourcis + clé registre proprement
 
 !macro customInstall
-  # Détecter si c'est une mise à jour ou une première installation.
-  # On vérifie si l'exe existait avant l'installation (clé registre laissée
-  # par la session précédente de l'installeur NSIS).
   ReadRegStr $R0 HKCU "Software\discowl-browser" "InstallPath"
-  StrCmp $R0 "" first_install is_update
 
-  first_install:
-    # Première installation — créer les raccourcis seulement s'ils n'existent pas
-    IfFileExists "$DESKTOP\Discowl Browser.lnk" skip_desktop create_desktop
-    create_desktop:
-      CreateShortCut "$DESKTOP\Discowl Browser.lnk" "$INSTDIR\Discowl Browser.exe"
-    skip_desktop:
+  # Si la clé existe → c'est une mise à jour, ne rien faire aux raccourcis
+  StrCmp $R0 "" do_first_install do_update
 
-    IfFileExists "$SMPROGRAMS\Discowl Browser\Discowl Browser.lnk" skip_startmenu create_startmenu
-    create_startmenu:
+  do_first_install:
+    # Bureau
+    IfFileExists "$DESKTOP\Discowl Browser.lnk" +3 0
+      CreateShortCut "$DESKTOP\Discowl Browser.lnk" \
+        "$INSTDIR\Discowl Browser.exe" "" \
+        "$INSTDIR\Discowl Browser.exe" 0 \
+        SW_SHOWNORMAL
+    
+    # Start Menu
+    IfFileExists "$SMPROGRAMS\Discowl Browser\Discowl Browser.lnk" +4 0
       CreateDirectory "$SMPROGRAMS\Discowl Browser"
-      CreateShortCut "$SMPROGRAMS\Discowl Browser\Discowl Browser.lnk" "$INSTDIR\Discowl Browser.exe"
-    skip_startmenu:
+      CreateShortCut "$SMPROGRAMS\Discowl Browser\Discowl Browser.lnk" \
+        "$INSTDIR\Discowl Browser.exe" "" \
+        "$INSTDIR\Discowl Browser.exe" 0 \
+        SW_SHOWNORMAL
 
-    # Mémoriser le chemin pour les prochaines mises à jour
     WriteRegStr HKCU "Software\discowl-browser" "InstallPath" "$INSTDIR"
-    Goto done_install
+    Goto install_done
 
-  is_update:
-    # Mise à jour — ne rien faire du tout avec les raccourcis
-    # Mettre à jour le chemin au cas où il aurait changé
+  do_update:
+    # Mise à jour silencieuse — ne toucher à rien
+    # Juste mettre à jour le chemin en registre
     WriteRegStr HKCU "Software\discowl-browser" "InstallPath" "$INSTDIR"
 
-  done_install:
+  install_done:
 !macroend
 
 !macro customUnInstall
-  # Désinstallation manuelle — supprimer raccourcis et clé registre
   Delete "$DESKTOP\Discowl Browser.lnk"
   Delete "$SMPROGRAMS\Discowl Browser\Discowl Browser.lnk"
   RMDir  "$SMPROGRAMS\Discowl Browser"
@@ -43,5 +53,8 @@
 !macroend
 
 !macro customRemoveFiles
-  # VIDE — ne jamais supprimer les raccourcis lors d'une mise à jour
+  # INTENTIONNELLEMENT VIDE
+  # electron-updater appelle ceci avant d'écraser les fichiers.
+  # En le laissant vide, aucun raccourci n'est jamais supprimé
+  # lors d'une mise à jour silencieuse.
 !macroend

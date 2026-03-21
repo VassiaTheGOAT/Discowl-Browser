@@ -35,8 +35,12 @@ document.addEventListener('focusin', (e) => {
   _autofillArmed = true;
 
   const r = el.getBoundingClientRect();
+  // Valider l'URL avant de l'envoyer au renderer
+  const currentUrl = window.location.href;
+  try { new URL(currentUrl); } catch { return; } // URL invalide
+  if (currentUrl.startsWith('javascript:') || currentUrl.startsWith('data:')) return;
   ipcRenderer.sendToHost('vault:field-focused', {
-    url:  window.location.href,
+    url:  currentUrl.slice(0, 2048),
     rect: { top: r.top, left: r.left, bottom: r.bottom, right: r.right, width: r.width }
   });
 }, true);
@@ -111,7 +115,15 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   setTimeout(() => {
     const creds = getCredentials(btn.closest('form'));
-    if (creds?.password) ipcRenderer.sendToHost('vault:credentials-submitted', creds);
+    if (creds?.password) {
+      // Valider avant envoi
+      const safe = {
+        url:      typeof creds.url      === 'string' ? creds.url.slice(0, 2048)  : '',
+        username: typeof creds.username === 'string' ? creds.username.slice(0, 512)  : '',
+        password: typeof creds.password === 'string' ? creds.password.slice(0, 4096) : '',
+      };
+      if (safe.url && safe.password) ipcRenderer.sendToHost('vault:credentials-submitted', safe);
+    }
   }, 300);
 }, true);
 

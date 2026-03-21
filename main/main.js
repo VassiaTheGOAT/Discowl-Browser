@@ -212,9 +212,16 @@ function createWindow() {
       return { action: 'deny' };
     });
 
-    // will-navigate avec disposition new-window (certains sites)
-    contents.on('will-navigate', (e, url) => {
-      // navigation normale dans l'onglet — laisser passer
+    // Bloquer les navigations vers des protocoles dangereux
+    contents.on('will-navigate', (event, url) => {
+      try {
+        const p = new URL(url);
+        const blocked = ['javascript:', 'data:', 'vbscript:', 'file:'];
+        if (blocked.includes(p.protocol)) {
+          console.warn('[Security] Blocked navigation to:', p.protocol);
+          event.preventDefault();
+        }
+      } catch { event.preventDefault(); }
     });
 
     // did-create-window : si une vraie fenêtre est quand même créée, la fermer
@@ -284,8 +291,38 @@ function createWindow() {
 ipcMain.handle('favorites:get', () => storage.getFavorites());
 
 ipcMain.handle('favorites:save', (_, bookmarks) => {
-  storage.saveFavorites(bookmarks);
-  BrowserWindow.getAllWindows().forEach(w => w.webContents.send('favorites:updated', bookmarks));
+  // Validation stricte — jamais de données arbitraires en JSON
+  if (!Array.isArray(bookmarks)) return false;
+  if (bookmarks.length > 10000) return false;
+  const ALLOWED_TYPES = new Set(['bookmark', 'folder']);
+  function sanitizeNode(node, depth = 0) {
+    if (!node || typeof node !== 'object' || Array.isArray(node)) return null;
+    if (depth > 10) return null; // max nesting
+    const clean = {
+      id:      typeof node.id      === 'string' ? node.id.slice(0, 64)    : String(Date.now()),
+      title:   typeof node.title   === 'string' ? node.title.slice(0, 512) : '',
+      type:    ALLOWED_TYPES.has(node.type) ? node.type : 'bookmark',
+      toolbar: !!node.toolbar,
+    };
+    if (clean.type === 'bookmark') {
+      if (typeof node.url !== 'string') return null;
+      try {
+        const u = new URL(node.url);
+        if (!['https:','http:','file:'].includes(u.protocol)) return null;
+      } catch { return null; }
+      clean.url = node.url.slice(0, 2048);
+      clean.favicon = typeof node.favicon === 'string' ? node.favicon.slice(0, 512) : '';
+    }
+    if (clean.type === 'folder' && Array.isArray(node.children)) {
+      clean.children = node.children.map(ch => sanitizeNode(ch, depth + 1)).filter(Boolean);
+    } else {
+      clean.children = [];
+    }
+    return clean;
+  }
+  const safe = bookmarks.map(b => sanitizeNode(b)).filter(Boolean);
+  storage.saveFavorites(safe);
+  BrowserWindow.getAllWindows().forEach(w => w.webContents.send('favorites:updated', safe));
   return true;
 });
 
@@ -315,11 +352,14 @@ ipcMain.handle('history:delete', (_, id) => {
   storage.deleteHistory(id);
   return true;
 });
-ipcMain.handle('history:search', (_, q)     => {
-  const h = storage.getHistory();
-  if (!q) return h;
-  const lq = q.toLowerCase();
-  return h.filter(e => e.title?.toLowerCase().includes(lq) || e.url?.toLowerCase().includes(lq));
+ipcMain.handle('history:search', (_, q) => {
+  if (typeof q !== 'string') return storage.getHistory();
+  const safe = q.slice(0, 256); // limite longueur recherche
+  const lq = safe.toLowerCase();
+  if (!lq) return storage.getHistory();
+  return storage.getHistory().filter(e =>
+    e.title?.toLowerCase().includes(lq) || e.url?.toLowerCase().includes(lq)
+  );
 });
 
 /* ══════════════════════════════════════════════════════════════
@@ -334,7 +374,10 @@ ipcMain.handle('settings:save', async (_, newSettings) => {
   const ALLOWED_KEYS = new Set([
     'defaultEngine','theme','torEnabled','homePage','newTabPage',
     'downloadPath','language','fontSize','showBookmarksToolbar',
-    'blockAds','doNotTrack','saveCookies','toolbarItems','customTitlebar'
+    'blockAds','doNotTrack','saveCookies','toolbarItems','customTitlebar',
+    'blockTrackers','httpsUpgrade','strictReferrer','blockWebRTC',
+    'clearOnExit','doh','blockFingerprinting','blockThirdPartyCookies',
+    'blockYoutubeAds','privacyLevel','proxy',
   ]);
   const safe = {};
   for (const [k, v] of Object.entries(newSettings)) {
@@ -427,7 +470,16 @@ ipcMain.handle('app:getPath', (_, name) => {
 });
 ipcMain.handle('app:getVersion',     ()          => app.getVersion());
 ipcMain.handle('app:getName',        ()          => app.getName());
-ipcMain.handle('app:relaunch',       ()          => { app.relaunch(); app.exit(0); });
+let _lastRelaunch = 0;
+ipcMain.handle('app:relaunch', () => {
+  const now = Date.now();
+  if (now - _lastRelaunch < 10000) {
+    console.warn('[Security] app:relaunch rate limited');
+    return false;
+  }
+  _lastRelaunch = now;
+  app.relaunch(); app.exit(0);
+});
 ipcMain.handle('storage:getDataPath', ()          => storage.getDataPath());
 ipcMain.handle('dialog:openDirectory', async () => {
   const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
@@ -505,7 +557,14 @@ ipcMain.handle('vault:removeProtection', ()         => { vaultManager.removePass
 const secondaryWindows = new Set();
 
 ipcMain.handle('window:openNew', (_, url) => {
-  // url optionnel — si absent, ouvre une nouvelle fenêtre vide
+  // Validation URL stricte si fournie
+  if (url !== undefined) {
+    if (typeof url !== 'string' || url.length > 2048) return false;
+    try {
+      const p = new URL(url);
+      if (!['https:', 'http:', 'file:'].includes(p.protocol)) return false;
+    } catch { return false; }
+  }
 
   const win = new BrowserWindow({
     width: 1280, height: 800,
@@ -616,12 +675,20 @@ ipcMain.handle('dialog:openFile', async () => {
 
 ipcMain.handle('file:write', async (_, filePath, content) => {
   if (typeof filePath !== 'string' || typeof content !== 'string') return { ok: false };
-  // Sécurité : ne permettre d'écrire que dans downloads ou temp
+  if (content.length > 50 * 1024 * 1024) return { ok: false, error: 'Content too large' }; // 50MB max
+  const resolved = path.resolve(filePath);
+  // Autoriser uniquement downloads et temp — jamais userData (données sensibles)
   const downloadsDir = app.getPath('downloads');
   const tempDir      = app.getPath('temp');
-  const resolved     = require('path').resolve(filePath);
   if (!resolved.startsWith(downloadsDir) && !resolved.startsWith(tempDir)) {
-    // Fichier choisi via dialog — on autorise
+    console.warn('[Security] Blocked file:write outside allowed dirs:', resolved);
+    return { ok: false, error: 'Path not allowed' };
+  }
+  // Bloquer les noms de fichiers dangereux
+  const basename = path.basename(resolved);
+  if (/\.(exe|bat|cmd|ps1|sh|msi|dll|com|scr|vbs|js|ts)$/i.test(basename)) {
+    console.warn('[Security] Blocked dangerous extension:', basename);
+    return { ok: false, error: 'Dangerous file type' };
   }
   try {
     fs.writeFileSync(resolved, content, 'utf8');
@@ -629,4 +696,28 @@ ipcMain.handle('file:write', async (_, filePath, content) => {
   } catch (e) {
     return { ok: false, error: e.message };
   }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   PERMISSIONS — bloquer les accès dangereux des pages web
+══════════════════════════════════════════════════════════════ */
+app.whenReady().then(() => {
+  // Pour toutes les sessions (default + persist:main + persist:private)
+  function applyPermissionHandler(sess) {
+    sess.setPermissionRequestHandler((webContents, permission, callback) => {
+      // Permissions autorisées
+      const ALLOWED = ['clipboard-read', 'clipboard-write', 'fullscreen'];
+      if (ALLOWED.includes(permission)) { callback(true); return; }
+      // Tout le reste est bloqué : notifications, geolocation, camera, microphone, etc.
+      console.log('[Security] Permission refusée:', permission);
+      callback(false);
+    });
+    sess.setPermissionCheckHandler((webContents, permission) => {
+      const ALLOWED = ['clipboard-read', 'clipboard-write', 'fullscreen'];
+      return ALLOWED.includes(permission);
+    });
+  }
+  applyPermissionHandler(session.defaultSession);
+  applyPermissionHandler(session.fromPartition('persist:main'));
+  applyPermissionHandler(session.fromPartition('persist:private'));
 });

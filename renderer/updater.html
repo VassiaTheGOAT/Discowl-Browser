@@ -2,67 +2,82 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'"/>
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:;"/>
   <title>Discowl</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       background: #0f1117;
       color: #e2e8f0;
-      width: 420px;
-      height: 260px;
+      width: 460px;
+      height: 280px;
       overflow: hidden;
       user-select: none;
+      -webkit-app-region: drag;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 24px;
-      -webkit-app-region: drag;
+      gap: 0;
     }
 
-    /* ── Logo + titre ── */
+    /* ── Header ── */
     .header {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 16px;
+      margin-bottom: 32px;
     }
 
     .logo {
-      width: 64px;
-      height: 64px;
+      width: 68px; height: 68px;
       object-fit: contain;
+      filter: drop-shadow(0 4px 12px rgba(12,192,223,.25));
     }
 
-    .brand { display: flex; flex-direction: column; gap: 3px; }
+    .brand { display: flex; flex-direction: column; gap: 4px; }
 
     .brand-name {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 700;
-      background: linear-gradient(135deg, #0cc0df, #ffde59);
+      background: linear-gradient(135deg, #0cc0df 0%, #ffde59 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      letter-spacing: -0.3px;
+      letter-spacing: -0.4px;
+      line-height: 1;
     }
 
-    .brand-version { font-size: 11px; color: #64748b; letter-spacing: 0.5px; }
+    .brand-tagline {
+      font-size: 11px;
+      color: #475569;
+      letter-spacing: 0.4px;
+    }
 
-    /* ── Panneau de téléchargement ── */
+    .brand-version {
+      font-size: 10px;
+      color: #334155;
+      letter-spacing: 0.5px;
+      margin-top: 1px;
+    }
+
+    /* ── Download panel ── */
     .dl-panel {
-      width: 340px;
+      width: 360px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 7px;
     }
 
-    /* Ligne statut + pourcentage */
-    .dl-row {
+    /* Status row */
+    .status-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      height: 18px;
     }
 
     .status-text {
@@ -72,237 +87,260 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      transition: color .2s;
     }
+    .status-text.success { color: #34d399; }
+    .status-text.error   { color: #f87171; }
 
-    .dl-pct {
+    .status-pct {
       font-size: 12px;
       font-weight: 600;
       color: #0cc0df;
-      min-width: 36px;
+      min-width: 40px;
       text-align: right;
       opacity: 0;
       transition: opacity .2s;
     }
-    .dl-pct.visible { opacity: 1; }
+    .status-pct.visible { opacity: 1; }
 
-    /* Barre de progression */
-    .progress-wrap {
+    /* Progress bar */
+    .progress-track {
       width: 100%;
-      height: 5px;
-      background: #1e2330;
-      border-radius: 3px;
+      height: 4px;
+      background: #1e293b;
+      border-radius: 2px;
       overflow: hidden;
       opacity: 0;
-      transition: opacity 0.3s;
+      transition: opacity .3s;
     }
-    .progress-wrap.visible { opacity: 1; }
+    .progress-track.visible { opacity: 1; }
 
-    .progress-bar {
+    .progress-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #0cc0df, #ffde59);
-      border-radius: 3px;
-      transition: width 0.25s ease;
+      background: linear-gradient(90deg, #0cc0df, #38bdf8, #ffde59);
+      background-size: 200% 100%;
+      border-radius: 2px;
+      transition: width .2s ease;
     }
 
-    .progress-bar.indeterminate {
+    .progress-fill.indeterminate {
       width: 28%;
-      animation: slide 1.4s ease-in-out infinite;
+      animation: indeterminate 1.5s ease-in-out infinite;
+    }
+    @keyframes indeterminate {
+      0%   { transform: translateX(-180%); }
+      100% { transform: translateX(550%); }
     }
 
-    @keyframes slide {
-      0%   { transform: translateX(-150%); }
-      100% { transform: translateX(500%); }
-    }
-
-    /* Ligne vitesse + taille */
-    .dl-meta {
+    /* Meta row: speed + size */
+    .meta-row {
       display: flex;
-      align-items: center;
       justify-content: space-between;
       height: 14px;
     }
-
-    .dl-speed, .dl-size {
+    .meta-speed, .meta-size {
       font-size: 10px;
-      color: #475569;
+      color: #334155;
       opacity: 0;
       transition: opacity .2s;
+      font-variant-numeric: tabular-nums;
     }
-    .dl-speed.visible, .dl-size.visible { opacity: 1; }
+    .meta-speed.visible, .meta-size.visible { opacity: 1; }
 
-    /* État "installing" */
+    /* Installing spinner row */
     .installing-row {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
+      height: 14px;
       opacity: 0;
       transition: opacity .3s;
     }
     .installing-row.visible { opacity: 1; }
 
     .spinner {
-      width: 14px; height: 14px;
-      border: 2px solid #1e2330;
+      width: 12px; height: 12px;
+      border: 1.5px solid #1e293b;
       border-top-color: #0cc0df;
       border-radius: 50%;
-      animation: spin .7s linear infinite;
+      animation: spin .65s linear infinite;
+      flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .installing-text { font-size: 12px; color: #64748b; }
+    .installing-text {
+      font-size: 10px;
+      color: #475569;
+    }
+
+    /* Error state */
+    .error-hint {
+      font-size: 10px;
+      color: #475569;
+      text-align: center;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .error-hint.visible { opacity: 1; }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <img src="../assets/logo-discowl.png" class="logo" alt="Discowl" draggable="false"/>
+    <img src="../assets/logo-discowl.png" class="logo" alt="" draggable="false" onerror="this.style.display='none'"/>
     <div class="brand">
       <div class="brand-name">Discowl</div>
-      <div class="brand-version" id="ver">v—</div>
+      <div class="brand-tagline">Private Browser</div>
+      <div class="brand-version" id="ver">—</div>
     </div>
   </div>
 
   <div class="dl-panel">
-    <!-- Ligne statut + % -->
-    <div class="dl-row">
-      <div class="status-text" id="status">Checking for updates…</div>
-      <div class="dl-pct" id="dl-pct"></div>
+    <div class="status-row">
+      <div class="status-text" id="status">Starting…</div>
+      <div class="status-pct" id="pct"></div>
     </div>
 
-    <!-- Barre -->
-    <div class="progress-wrap" id="progress-wrap">
-      <div class="progress-bar indeterminate" id="progress-bar"></div>
+    <div class="progress-track" id="track">
+      <div class="progress-fill indeterminate" id="fill"></div>
     </div>
 
-    <!-- Vitesse + taille -->
-    <div class="dl-meta">
-      <div class="dl-speed" id="dl-speed"></div>
-      <div class="dl-size"  id="dl-size"></div>
+    <div class="meta-row">
+      <div class="meta-speed" id="speed"></div>
+      <div class="meta-size"  id="size"></div>
     </div>
 
-    <!-- Spinner installation -->
-    <div class="installing-row" id="installing-row">
+    <div class="installing-row" id="installing">
       <div class="spinner"></div>
-      <div class="installing-text" id="installing-text">Installing…</div>
+      <div class="installing-text">Applying update…</div>
+    </div>
+
+    <div class="error-hint" id="error-hint">
+      Launching without update…
     </div>
   </div>
 
   <script>
-    const statusEl      = document.getElementById('status');
-    const wrapEl        = document.getElementById('progress-wrap');
-    const barEl         = document.getElementById('progress-bar');
-    const verEl         = document.getElementById('ver');
-    const pctEl         = document.getElementById('dl-pct');
-    const speedEl       = document.getElementById('dl-speed');
-    const sizeEl        = document.getElementById('dl-size');
-    const installingEl  = document.getElementById('installing-row');
+    const $ = id => document.getElementById(id);
 
-    // ── Helpers ──────────────────────────────────────────────────
-    function fmt(bytes) {
-      if (!bytes) return '';
-      if (bytes < 1024)        return bytes + ' B';
-      if (bytes < 1048576)     return (bytes / 1024).toFixed(1) + ' KB';
+    const els = {
+      ver:      $('ver'),
+      status:   $('status'),
+      pct:      $('pct'),
+      track:    $('track'),
+      fill:     $('fill'),
+      speed:    $('speed'),
+      size:     $('size'),
+      installing: $('installing'),
+      errorHint:  $('error-hint'),
+    };
+
+    // ── Helpers ──────────────────────────────────────────────
+    const fmt = (bytes) => {
+      if (!bytes || bytes <= 0) return '';
+      if (bytes < 1024)       return bytes + ' B';
+      if (bytes < 1048576)    return (bytes / 1024).toFixed(1) + ' KB';
       return (bytes / 1048576).toFixed(1) + ' MB';
-    }
+    };
 
-    function setStatus(txt) { statusEl.textContent = txt; }
+    function setState(status, opts = {}) {
+      // status text
+      els.status.className = 'status-text' + (opts.cls ? ' ' + opts.cls : '');
+      els.status.textContent = status;
 
-    function showIndeterminate() {
-      wrapEl.classList.add('visible');
-      barEl.classList.add('indeterminate');
-      barEl.style.width = '';
-      pctEl.classList.remove('visible');
-      speedEl.classList.remove('visible');
-      sizeEl.classList.remove('visible');
-    }
-
-    function showProgress(pct, received, total, speed) {
-      wrapEl.classList.add('visible');
-      barEl.classList.remove('indeterminate');
-      barEl.style.width = pct + '%';
-
-      pctEl.textContent = pct + '%';
-      pctEl.classList.add('visible');
-
-      if (received && total) {
-        sizeEl.textContent = fmt(received) + ' / ' + fmt(total);
-        sizeEl.classList.add('visible');
+      // percent
+      if (opts.pct !== undefined) {
+        els.pct.textContent = opts.pct + '%';
+        els.pct.classList.add('visible');
+      } else {
+        els.pct.classList.remove('visible');
       }
-      if (speed) {
-        speedEl.textContent = fmt(speed) + '/s';
-        speedEl.classList.add('visible');
+
+      // progress bar
+      if (opts.indeterminate) {
+        els.track.classList.add('visible');
+        els.fill.classList.add('indeterminate');
+        els.fill.style.width = '';
+      } else if (opts.pct !== undefined) {
+        els.track.classList.add('visible');
+        els.fill.classList.remove('indeterminate');
+        els.fill.style.width = opts.pct + '%';
+      } else {
+        els.track.classList.remove('visible');
+        els.fill.classList.remove('indeterminate');
       }
+
+      // meta
+      if (opts.speed) { els.speed.textContent = fmt(opts.speed) + '/s'; els.speed.classList.add('visible'); }
+      else els.speed.classList.remove('visible');
+
+      if (opts.size) { els.size.textContent = fmt(opts.transferred) + ' / ' + fmt(opts.size); els.size.classList.add('visible'); }
+      else els.size.classList.remove('visible');
+
+      // installing spinner
+      opts.installing ? els.installing.classList.add('visible') : els.installing.classList.remove('visible');
+
+      // error hint
+      opts.errorHint ? els.errorHint.classList.add('visible') : els.errorHint.classList.remove('visible');
     }
 
-    function showInstalling(version) {
-      barEl.classList.remove('indeterminate');
-      barEl.style.width = '100%';
-      pctEl.textContent = '100%';
-      speedEl.classList.remove('visible');
-      sizeEl.classList.remove('visible');
-      installingEl.classList.add('visible');
-      statusEl.textContent = `Update ${version} ready…`;
-    }
+    // ── Init ─────────────────────────────────────────────────
+    window.updaterAPI?.getVersion().then(v => {
+      if (v) els.ver.textContent = 'v' + v;
+    });
 
-    function hideProgress() {
-      wrapEl.classList.remove('visible');
-      pctEl.classList.remove('visible');
-      speedEl.classList.remove('visible');
-      sizeEl.classList.remove('visible');
-    }
+    setState('Checking for updates…', { indeterminate: true });
 
-    // ── Init ─────────────────────────────────────────────────────
-    window.updaterAPI?.getVersion().then(v => { verEl.textContent = 'v' + v; });
-    showIndeterminate();
+    // ── Speed calc ───────────────────────────────────────────
+    let _lastBytes = 0, _lastTime = Date.now(), _smoothSpeed = 0;
 
-    // ── Variables pour calcul vitesse ────────────────────────────
-    let _lastReceived = 0;
-    let _lastTime     = Date.now();
-    let _speed        = 0;
-
-    // ── Écoute des événements ────────────────────────────────────
-    window.updaterAPI?.onStatus((event) => {
-      switch (event.type) {
+    // ── Events ───────────────────────────────────────────────
+    window.updaterAPI?.onStatus(e => {
+      switch (e.type) {
 
         case 'checking':
-          setStatus('Checking for updates…');
-          showIndeterminate();
+          setState('Checking for updates…', { indeterminate: true });
           break;
 
         case 'not-available':
-          setStatus('Already up to date. Launching…');
-          hideProgress();
+          setState('Already up to date', { cls: 'success' });
           break;
 
         case 'available':
-          setStatus(`Update ${event.version} found — starting download…`);
-          showProgress(0);
-          _lastReceived = 0;
-          _lastTime     = Date.now();
+          setState(`Update ${e.version} found — downloading…`, { pct: 0 });
+          _lastBytes = 0; _lastTime = Date.now();
           break;
 
         case 'progress': {
-          const now      = Date.now();
-          const elapsed  = (now - _lastTime) / 1000;
-          if (elapsed > 0.3) {
-            _speed        = (event.received - _lastReceived) / elapsed;
-            _lastReceived = event.received;
-            _lastTime     = now;
+          const now = Date.now();
+          const dt  = (now - _lastTime) / 1000;
+          if (dt > 0.4) {
+            const rawSpeed = (e.transferred - _lastBytes) / dt;
+            _smoothSpeed = _smoothSpeed * 0.6 + rawSpeed * 0.4; // EMA smoothing
+            _lastBytes = e.transferred;
+            _lastTime  = now;
           }
-          setStatus(`Downloading Discowl ${event.version}…`);
-          showProgress(event.percent, event.received, event.total, _speed > 0 ? _speed : 0);
+          setState(`Downloading Discowl ${e.version || ''}…`, {
+            pct:       e.percent,
+            speed:     Math.round(_smoothSpeed),
+            size:      e.total,
+            transferred: e.transferred,
+          });
           break;
         }
 
         case 'downloaded':
-          showInstalling(event.version);
+          setState(`Update ${e.version} ready`, { pct: 100, installing: true });
+          break;
+
+        case 'timeout':
+          setState('No connection — launching…', { cls: 'error', errorHint: true });
           break;
 
         case 'error':
-          setStatus('Update failed — launching current version…');
-          hideProgress();
+          setState('Update failed', { cls: 'error', errorHint: true });
           break;
       }
     });

@@ -1,22 +1,22 @@
 {
   "name": "discowl-browser",
-  "version": "1.2.8",
-  "description": "Discowl Browser - New gen browser",
+  "version": "1.2.9",
+  "description": "Discowl -New gen browser",
   "main": "main/main.js",
-  "author": "Discowl",
-  "license": "GPL-3.0-only",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win --publish never",
-    "build:mac": "electron-builder --mac --publish never",
-    "build:linux": "electron-builder --linux --publish never",
-    "release": "electron-builder --win --publish always"
+    "dev": "electron .",
+    "build": "electron-builder --win",
+    "build:all": "electron-builder -wml",
+    "release": "electron-builder --win --publish always",
+    "release:draft": "electron-builder --win --publish never"
   },
   "dependencies": {
-    "electron-updater": "^6.1.7"
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
-    "electron": "^28.1.0",
+    "electron": "^28.0.0",
     "electron-builder": "^24.9.1"
   },
   "build": {
@@ -25,10 +25,8 @@
     "publish": {
       "provider": "github",
       "owner": "VassiaTheGOAT",
-      "repo": "Discowl-Browser"
-    },
-    "directories": {
-      "output": "dist"
+      "repo": "Discowl-Browser",
+      "releaseType": "release"
     },
     "files": [
       "main/**",
@@ -39,6 +37,11 @@
       "assets/**",
       "package.json"
     ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "artifactName": "Discowl-Setup.exe",
     "win": {
       "target": [
         {
@@ -49,7 +52,8 @@
         }
       ],
       "icon": "assets/logo-discowl.ico",
-      "executableName": "Discowl Browser"
+      "executableName": "Discowl Browser",
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
@@ -59,15 +63,31 @@
       "shortcutName": "Discowl Browser",
       "include": "build/installer.nsh",
       "deleteAppDataOnUninstall": false,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "differentialPackage": true
     },
     "mac": {
-      "target": "dmg",
-      "icon": "assets/icon.icns"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "assets/icon.png"
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/logo-discowl.png",
+      "category": "Network;WebBrowser"
     },
     "extraResources": [
       {
@@ -75,6 +95,6 @@
         "to": "tor"
       }
     ],
-    "artifactName": "Discowl-Setup.exe"
+    "generateUpdatesFilesForAllChannels": true
   }
 }

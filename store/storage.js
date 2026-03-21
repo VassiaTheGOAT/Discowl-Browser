@@ -28,7 +28,18 @@ class Storage {
   _read(filePath) {
     try {
       const raw = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(raw);
+      // Limite de taille — un JSON de settings/favoris ne devrait pas dépasser 10MB
+      if (raw.length > 10 * 1024 * 1024) {
+        console.error('[Security] Fichier JSON trop volumineux, ignoré:', filePath);
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      // Doit être un objet ou un tableau — pas une primitive injectée
+      if (parsed === null || (typeof parsed !== 'object')) {
+        console.warn('[Security] JSON invalide (primitive), ignoré:', filePath);
+        return null;
+      }
+      return parsed;
     } catch (e) {
       if (e.code !== 'ENOENT') {
         console.warn('[Storage] Fichier corrompu — backup :', filePath);
@@ -169,7 +180,18 @@ class Storage {
 
   /* ─── Historique ───────────────────────────────────────────── */
 
-  getHistory() { return this._read(this.historyPath) || []; }
+  getHistory() {
+    const raw = this._read(this.historyPath);
+    if (!Array.isArray(raw)) return [];
+    // Sanitize chaque entrée
+    return raw.slice(0, 2000).map(e => ({
+      id:        typeof e.id        === 'string' ? e.id.slice(0, 128)  : '',
+      url:       typeof e.url       === 'string' ? e.url.slice(0, 2048) : '',
+      title:     typeof e.title     === 'string' ? e.title.slice(0, 512) : '',
+      favicon:   typeof e.favicon   === 'string' ? e.favicon.slice(0, 512) : '',
+      timestamp: typeof e.timestamp === 'number' ? e.timestamp : 0,
+    })).filter(e => e.url && e.id);
+  }
 
   addHistory(entry) {
     const history = this.getHistory();
@@ -194,7 +216,16 @@ class Storage {
 
   /* ─── Paramètres ───────────────────────────────────────────── */
 
-  getSettings()      { return { ...this._defaultSettings(), ...(this._read(this.settingsPath) || {}) }; }
+  getSettings() {
+    const defaults = this._defaultSettings();
+    const raw = this._read(this.settingsPath) || {};
+    // Ne garder que les clés connues — protection contre JSON poisoning
+    const safe = {};
+    for (const key of Object.keys(defaults)) {
+      if (key in raw) safe[key] = raw[key];
+    }
+    return { ...defaults, ...safe };
+  }
   saveSettings(data) { this._write(this.settingsPath, { ...this.getSettings(), ...data }); }
 }
 

@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initMenubar();
     initVaultBanners();
     initCustomTitlebar();
+    initNtpBackground();
 
     // Appliquer les traductions sur tout le DOM statique
     if (window.i18n) window.i18n.apply();
@@ -849,6 +850,8 @@ function navigateActive(url, _fromVirtualBack = false) {
     refreshTab(tab.id);
     if (ntpEl) ntpEl.classList.remove('hidden');
     updateNewtabMode(tab.isPrivate);
+    // Réappliquer le fond (prioritaire sur tous les modes)
+    try { if (settings.ntpBackground?.type) applyNtpBackground(settings.ntpBackground); } catch {}
     clearNewtabSearch();
     updateUrlBar('');
     // Activer le bouton back si on est venu d'une vraie page
@@ -2069,6 +2072,234 @@ function updateNewtabMode(isPrivate) {
 /* ══════════════════════════════════════════════════════════════
    NEW TAB PAGE
 ══════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════
+   NTP BACKGROUND — personnalisation fond homepage
+   Stockage : settings.ntpBackground = { type, value }
+     type = 'none' | 'color' | 'image'
+     value = '' | '#hex' | 'data:...' | 'https://...'
+   S'applique en priorité sur .newtab-page via CSS variables.
+   Prioritaire sur tous les modes (privé, tor, normal).
+══════════════════════════════════════════════════════════════ */
+
+function initNtpBackground() {
+  const ntpEl   = document.getElementById('new-tab-page');
+  const btn     = document.getElementById('ntp-bg-btn');
+  const dock    = document.getElementById('ntp-bg-dock');
+  const closeBtn= document.getElementById('ntp-dock-close');
+
+  if (!ntpEl || !btn || !dock) return;
+
+  // ── Charger la config sauvegardée ──────────────────────────
+  let bgConfig = { type: 'none', value: '' };
+  try {
+    const saved = settings.ntpBackground;
+    if (saved && saved.type) bgConfig = saved;
+  } catch {}
+
+  applyNtpBackground(bgConfig);
+
+  // ── Ouvrir / fermer le dock ────────────────────────────────
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = dock.classList.contains('visible');
+    if (isOpen) {
+      closeDock();
+    } else {
+      dock.classList.remove('hidden');
+      requestAnimationFrame(() => dock.classList.add('visible'));
+      syncDockUI(bgConfig);
+    }
+  });
+
+  function closeDock() {
+    dock.classList.remove('visible');
+    setTimeout(() => dock.classList.add('hidden'), 200);
+  }
+
+  closeBtn?.addEventListener('click', closeDock);
+
+  document.addEventListener('mousedown', (e) => {
+    if (!dock.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+      if (dock.classList.contains('visible')) closeDock();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dock.classList.contains('visible')) closeDock();
+  });
+
+  // ── Swatches de couleur ────────────────────────────────────
+  document.querySelectorAll('#ntp-colors .ntp-swatch[data-value]').forEach(sw => {
+    sw.addEventListener('click', () => {
+      const val = sw.dataset.value;
+      if (val === '') {
+        bgConfig = { type: 'none', value: '' };
+      } else {
+        bgConfig = { type: 'color', value: val };
+      }
+      applyNtpBackground(bgConfig);
+      saveNtpBackground(bgConfig);
+      syncDockUI(bgConfig);
+    });
+  });
+
+  // Color picker custom
+  const picker = document.getElementById('ntp-color-picker');
+  picker?.addEventListener('input', () => {
+    bgConfig = { type: 'color', value: picker.value };
+    applyNtpBackground(bgConfig);
+  });
+  picker?.addEventListener('change', () => {
+    bgConfig = { type: 'color', value: picker.value };
+    applyNtpBackground(bgConfig);
+    saveNtpBackground(bgConfig);
+    syncDockUI(bgConfig);
+  });
+
+  // ── Upload image locale ────────────────────────────────────
+  const fileInput = document.getElementById('ntp-file-input');
+  fileInput?.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    // Vérifier type MIME
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select an image file', 'error');
+      return;
+    }
+    // Limite 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Image too large (max 10MB)', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      bgConfig = { type: 'image', value: dataUrl };
+      applyNtpBackground(bgConfig);
+      saveNtpBackground(bgConfig);
+      syncDockUI(bgConfig);
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = ''; // reset pour permettre re-sélection même fichier
+  });
+
+  // ── Image par URL ──────────────────────────────────────────
+  const urlBtn   = document.getElementById('ntp-url-btn');
+  const urlRow   = document.getElementById('ntp-url-row');
+  const urlInput = document.getElementById('ntp-url-input');
+  const urlApply = document.getElementById('ntp-url-apply');
+
+  urlBtn?.addEventListener('click', () => {
+    urlRow?.classList.toggle('hidden');
+    if (!urlRow?.classList.contains('hidden')) urlInput?.focus();
+  });
+
+  urlApply?.addEventListener('click', () => applyUrlImage());
+  urlInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyUrlImage(); });
+
+  function applyUrlImage() {
+    const url = urlInput?.value?.trim();
+    if (!url) return;
+    try {
+      const p = new URL(url);
+      if (!['https:', 'http:'].includes(p.protocol)) {
+        showToast('Only https:// URLs are allowed', 'error');
+        return;
+      }
+    } catch {
+      showToast('Invalid URL', 'error');
+      return;
+    }
+    bgConfig = { type: 'image', value: url };
+    applyNtpBackground(bgConfig);
+    saveNtpBackground(bgConfig);
+    syncDockUI(bgConfig);
+    urlRow?.classList.add('hidden');
+  }
+
+  // ── Supprimer le fond ──────────────────────────────────────
+  const removeBtn = document.getElementById('ntp-bg-remove');
+  removeBtn?.addEventListener('click', () => {
+    bgConfig = { type: 'none', value: '' };
+    applyNtpBackground(bgConfig);
+    saveNtpBackground(bgConfig);
+    syncDockUI(bgConfig);
+  });
+
+  // ── Synchroniser l'UI du dock avec l'état courant ──────────
+  function syncDockUI(cfg) {
+    // Swatches — marquer l'actif
+    document.querySelectorAll('#ntp-colors .ntp-swatch[data-value]').forEach(sw => {
+      sw.classList.toggle('active', cfg.type === 'color' && sw.dataset.value === cfg.value);
+      if (cfg.type === 'none' && sw.dataset.value === '') sw.classList.add('active');
+    });
+
+    // Preview image
+    const preview  = document.getElementById('ntp-img-preview');
+    const thumb    = document.getElementById('ntp-img-thumb');
+    const info     = document.getElementById('ntp-img-info');
+    const rmBtn    = document.getElementById('ntp-bg-remove');
+
+    if (cfg.type === 'image' && cfg.value) {
+      preview?.classList.remove('hidden');
+      if (thumb) thumb.src = cfg.value;
+      if (info) {
+        if (cfg.value.startsWith('data:')) {
+          // Estimer la taille
+          const kb = Math.round(cfg.value.length * 0.75 / 1024);
+          info.textContent = `Local image · ~${kb} KB`;
+        } else {
+          try { info.textContent = new URL(cfg.value).hostname; } catch { info.textContent = 'URL image'; }
+        }
+      }
+      rmBtn?.classList.remove('hidden');
+    } else {
+      preview?.classList.add('hidden');
+      rmBtn?.classList.add('hidden');
+    }
+  }
+}
+
+/* ── Appliquer le fond sur le DOM ─────────────────────────── */
+function applyNtpBackground(cfg) {
+  const ntpEl = document.getElementById('new-tab-page');
+  if (!ntpEl) return;
+
+  if (cfg.type === 'color' && cfg.value) {
+    ntpEl.style.setProperty('--ntp-bg-color', cfg.value);
+    ntpEl.style.removeProperty('--ntp-bg-image');
+    ntpEl.style.backgroundImage = '';
+    ntpEl.style.backgroundColor = cfg.value;
+  } else if (cfg.type === 'image' && cfg.value) {
+    const imgVal = `url('${cfg.value.replace(/'/g, "\'")}')`;
+    ntpEl.style.setProperty('--ntp-bg-image', imgVal);
+    ntpEl.style.removeProperty('--ntp-bg-color');
+    ntpEl.style.backgroundImage = imgVal;
+    ntpEl.style.backgroundSize  = 'cover';
+    ntpEl.style.backgroundPosition = 'center';
+    ntpEl.style.backgroundColor = '';
+  } else {
+    // Réinitialiser
+    ntpEl.style.removeProperty('--ntp-bg-image');
+    ntpEl.style.removeProperty('--ntp-bg-color');
+    ntpEl.style.backgroundImage = '';
+    ntpEl.style.backgroundColor = '';
+  }
+}
+
+/* ── Sauvegarder dans les settings ───────────────────────── */
+async function saveNtpBackground(cfg) {
+  try {
+    await window.discowlAPI.settings.save({ ntpBackground: cfg });
+    settings.ntpBackground = cfg;
+  } catch (e) {
+    console.error('[NtpBg] Save error:', e);
+  }
+}
+
 function setupNewTabPage() {
   const searchInput = document.getElementById('newtab-search-input');
   const searchBtn   = document.getElementById('newtab-search-btn');
@@ -2152,6 +2383,8 @@ function applySettings(s) {
   if (s.toolbarItems) applyToolbarConfig(s.toolbarItems);
   // Thème — appliqué sur <html> pour le chrome complet du navigateur
   if (s.theme) applyTheme(s.theme);
+  // Fond homepage
+  if (s.ntpBackground?.type) applyNtpBackground(s.ntpBackground);
 
   // Barre des favoris
   const bmToolbar = document.getElementById('bookmarks-toolbar');

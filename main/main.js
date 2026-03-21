@@ -377,11 +377,23 @@ ipcMain.handle('settings:save', async (_, newSettings) => {
     'blockAds','doNotTrack','saveCookies','toolbarItems','customTitlebar',
     'blockTrackers','httpsUpgrade','strictReferrer','blockWebRTC',
     'clearOnExit','doh','blockFingerprinting','blockThirdPartyCookies',
-    'blockYoutubeAds','privacyLevel','proxy',
+    'blockYoutubeAds','privacyLevel','proxy','ntpBackground',
   ]);
   const safe = {};
   for (const [k, v] of Object.entries(newSettings)) {
-    if (ALLOWED_KEYS.has(k)) safe[k] = v;
+    if (!ALLOWED_KEYS.has(k)) continue;
+    // Validation spéciale pour ntpBackground
+    if (k === 'ntpBackground') {
+      if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+      const VALID_TYPES = new Set(['none','color','image']);
+      if (!VALID_TYPES.has(v.type)) continue;
+      if (typeof v.value !== 'string') continue;
+      // Limiter la taille (une image base64 peut être grande mais raisonnable)
+      if (v.value.length > 5 * 1024 * 1024) continue; // 5MB max
+      safe[k] = { type: v.type, value: v.value };
+      continue;
+    }
+    safe[k] = v;
   }
   const old = storage.getSettings();
   storage.saveSettings(safe);

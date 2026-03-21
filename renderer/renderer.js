@@ -2107,7 +2107,11 @@ function initNtpBackground() {
       closeDock();
     } else {
       dock.classList.remove('hidden');
-      requestAnimationFrame(() => dock.classList.add('visible'));
+      requestAnimationFrame(() => {
+        dock.classList.add('visible');
+        // Traduire le dock au moment où il s'ouvre
+        if (window.i18n) window.i18n.apply(dock);
+      });
       syncDockUI(bgConfig);
     }
   });

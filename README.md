@@ -1,1 +1,3 @@
-A personnal project.
+Discowl Bowser is a personnal project, free and privacy-based.
+We don't try to steal datas as a lot of browsers do, we are here to give a full complete browser, without anything wanted in return. We are making this browser with only passion, and the only thing that we want is that people use it. Because one more user for us, is one more reason to continue.
+Thank for all people who share it, who use it.

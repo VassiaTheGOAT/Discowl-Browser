@@ -2,7 +2,7 @@
 /* ═══════════════════════════════════════════════════════════════
    Discowl i18n — fichier unique, aucun patch, aucun chaînage.
    ═══════════════════════════════════════════════════════════════ */
-
+ 
 const T = {
 en: {
   'menu.file':'File','menu.edit':'Edit','menu.view':'View','menu.history':'History','menu.bookmarks':'Bookmarks','menu.help':'Help',
@@ -160,7 +160,7 @@ en: {
   'ctx.print':            'Print…',
   'ctx.view_source':      'View page source',
   'ctx.inspect':          'Inspect',
-
+ 
 },
 fr: {
   'menu.file':'Fichier','menu.edit':'\u00c9dition','menu.view':'Affichage','menu.history':'Historique','menu.bookmarks':'Favoris','menu.help':'Aide',
@@ -295,7 +295,7 @@ fr: {
   'toast.password_save_error':'Impossible d\'enregistrer le mot de passe',
 },
 };
-
+ 
 // Add es, de, it as copies of en with key overrides for brevity
 // Full translations for major strings
 const LANG_EXTRA = {
@@ -330,16 +330,16 @@ it: {'menu.file':'File','menu.edit':'Modifica','menu.view':'Visualizza','menu.hi
   'ctx.view_source':'Visualizza sorgente','ctx.inspect':'Ispeziona',
 },
 };
-
+ 
 // Merge LANG_EXTRA into T
 Object.entries(LANG_EXTRA).forEach(([lang, keys]) => {
   T[lang] = Object.assign({}, T.en, keys);
 });
-
+ 
 /* ═══════════════════════════════════════════════════════════════
    Moteur — unique, propre, aucun patch
    ═══════════════════════════════════════════════════════════════ */
-
+ 
 // ── Inject extra keys directly into T ───────────────────────
 const T_EXTRA = {
   en: {
@@ -396,8 +396,8 @@ const T_EXTRA = {
 Object.entries(T_EXTRA).forEach(([lang, keys]) => {
   if (T[lang]) Object.assign(T[lang], keys);
 });
-
-
+ 
+ 
 // Toolbar context menu keys
 const T_TOOLBAR = {
   en: { 'ctx.toolbar_new_tab':'New Tab','ctx.toolbar_new_window':'New Window','ctx.toolbar_customize':'Customize toolbar…','ctx.toolbar_bm_bar':'Toggle bookmarks bar','ctx.toolbar_zoom_reset':'Reset zoom','ctx.toolbar_fullscreen':'Toggle fullscreen' },
@@ -407,20 +407,115 @@ const T_TOOLBAR = {
   it: { 'ctx.toolbar_new_tab':'Nuova scheda','ctx.toolbar_new_window':'Nuova finestra','ctx.toolbar_customize':'Personalizza barra…','ctx.toolbar_bm_bar':'Mostra/nascondi barra segnalibri','ctx.toolbar_zoom_reset':'Reimposta zoom','ctx.toolbar_fullscreen':'Schermo intero' },
 };
 Object.entries(T_TOOLBAR).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
-
+ 
+ 
+// ── NTP Background customize keys ──────────────────────────
+const T_NTP = {
+  en: {
+    'ntp.customize':        'Customize',
+    'ntp.background':       'Background',
+    'ntp.color':            'Color',
+    'ntp.image':            'Image',
+    'ntp.upload':           'Upload',
+    'ntp.url_btn':          'URL',
+    'ntp.remove':           'Remove',
+    'ntp.apply':            'Apply',
+    'ntp.default_title':    'Default',
+    'ntp.dark_title':       'Dark',
+    'ntp.navy_title':       'Navy',
+    'ntp.midnight_title':   'Midnight',
+    'ntp.purple_title':     'Deep purple',
+    'ntp.forest_title':     'Forest',
+    'ntp.amber_title':      'Amber',
+    'ntp.crimson_title':    'Crimson',
+    'ntp.light_title':      'Light',
+    'ntp.lavender_title':   'Lavender',
+    'ntp.custom_color':     'Custom color',
+    'ntp.upload_title':     'Upload image',
+    'ntp.url_title':        'Image from URL',
+    'ntp.url_placeholder':  'https://example.com/image.jpg',
+    'ntp.local_image':      'Local image',
+  },
+  fr: {
+    'ntp.customize':        'Personnaliser',
+    'ntp.background':       'Fond d’écran',
+    'ntp.color':            'Couleur',
+    'ntp.image':            'Image',
+    'ntp.upload':           'Importer',
+    'ntp.url_btn':          'URL',
+    'ntp.remove':           'Supprimer',
+    'ntp.apply':            'Appliquer',
+    'ntp.default_title':    'Par défaut',
+    'ntp.dark_title':       'Sombre',
+    'ntp.navy_title':       'Marine',
+    'ntp.midnight_title':   'Minuit',
+    'ntp.purple_title':     'Violet profond',
+    'ntp.forest_title':     'Forêt',
+    'ntp.amber_title':      'Ambre',
+    'ntp.crimson_title':    'Cramoisi',
+    'ntp.light_title':      'Clair',
+    'ntp.lavender_title':   'Lavande',
+    'ntp.custom_color':     'Couleur personnalisée',
+    'ntp.upload_title':     'Importer une image',
+    'ntp.url_title':        'Image depuis une URL',
+    'ntp.url_placeholder':  'https://exemple.com/image.jpg',
+    'ntp.local_image':      'Image locale',
+  },
+  es: {
+    'ntp.customize':'Personalizar','ntp.background':'Fondo de pantalla',
+    'ntp.color':'Color','ntp.image':'Imagen','ntp.upload':'Subir',
+    'ntp.url_btn':'URL','ntp.remove':'Eliminar','ntp.apply':'Aplicar',
+    'ntp.default_title':'Por defecto','ntp.dark_title':'Oscuro',
+    'ntp.navy_title':'Marino','ntp.midnight_title':'Medianoche',
+    'ntp.purple_title':'Violeta','ntp.forest_title':'Bosque',
+    'ntp.amber_title':'Ámbar','ntp.crimson_title':'Carmesí',
+    'ntp.light_title':'Claro','ntp.lavender_title':'Lavanda',
+    'ntp.custom_color':'Color personalizado','ntp.upload_title':'Subir imagen',
+    'ntp.url_title':'Imagen desde URL','ntp.url_placeholder':'https://ejemplo.com/imagen.jpg',
+    'ntp.local_image':'Imagen local',
+  },
+  de: {
+    'ntp.customize':'Anpassen','ntp.background':'Hintergrund',
+    'ntp.color':'Farbe','ntp.image':'Bild','ntp.upload':'Hochladen',
+    'ntp.url_btn':'URL','ntp.remove':'Entfernen','ntp.apply':'Anwenden',
+    'ntp.default_title':'Standard','ntp.dark_title':'Dunkel',
+    'ntp.navy_title':'Marine','ntp.midnight_title':'Mitternacht',
+    'ntp.purple_title':'Tiefviolett','ntp.forest_title':'Wald',
+    'ntp.amber_title':'Amber','ntp.crimson_title':'Karmesin',
+    'ntp.light_title':'Hell','ntp.lavender_title':'Lavendel',
+    'ntp.custom_color':'Benutzerdefinierte Farbe','ntp.upload_title':'Bild hochladen',
+    'ntp.url_title':'Bild von URL','ntp.url_placeholder':'https://beispiel.com/bild.jpg',
+    'ntp.local_image':'Lokales Bild',
+  },
+  it: {
+    'ntp.customize':'Personalizza','ntp.background':'Sfondo',
+    'ntp.color':'Colore','ntp.image':'Immagine','ntp.upload':'Carica',
+    'ntp.url_btn':'URL','ntp.remove':'Rimuovi','ntp.apply':'Applica',
+    'ntp.default_title':'Predefinito','ntp.dark_title':'Scuro',
+    'ntp.navy_title':'Marina','ntp.midnight_title':'Mezzanotte',
+    'ntp.purple_title':'Viola','ntp.forest_title':'Foresta',
+    'ntp.amber_title':'Ambra','ntp.crimson_title':'Cremisi',
+    'ntp.light_title':'Chiaro','ntp.lavender_title':'Lavanda',
+    'ntp.custom_color':'Colore personalizzato','ntp.upload_title':'Carica immagine',
+    'ntp.url_title':'Immagine da URL','ntp.url_placeholder':'https://esempio.com/immagine.jpg',
+    'ntp.local_image':'Immagine locale',
+  },
+};
+Object.entries(T_NTP).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
+ 
 const i18n = (() => {
   let _lang = 'en';
-
+ 
   function setLang(lang) { _lang = T[lang] ? lang : 'en'; }
   function getLang()     { return _lang; }
   function getAvailable(){ return Object.keys(T); }
-
+ 
   function t(key, vars) {
     let str = T[_lang]?.[key] ?? T.en?.[key] ?? key;
     if (vars) Object.entries(vars).forEach(([k,v]) => { str = str.replace(`{${k}}`, v); });
     return str;
   }
-
+ 
   function apply(root) {
     const r = root || document;
     r.querySelectorAll('[data-i18n]').forEach(el => {
@@ -440,9 +535,9 @@ const i18n = (() => {
     r.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
     r.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   }
-
+ 
   return { setLang, getLang, getAvailable, t, apply };
 })();
-
+ 
 window.i18n = i18n;
 console.log('[i18n] loaded, ctx.toolbar_new_tab=', i18n.t('ctx.toolbar_new_tab'), 'tab_new=', i18n.t('ctx.tab_new'));

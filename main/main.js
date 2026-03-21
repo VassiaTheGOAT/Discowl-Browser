@@ -10,7 +10,8 @@ const privacyManager  = require('./privacyManager');
 
 const passwordManager = require('./passwordManager');
 const vaultManager    = require('./vaultManager');
-const { runUpdater, registerIpc: registerUpdaterIpc } = require('./updater');
+const { runUpdater, registerIpc: registerUpdaterIpc,
+        startBackgroundChecks, stopBackgroundChecks } = require('./updater');
 const Storage    = require('../store/storage');
 
 /* ══════════════════════════════════════════════════════════════
@@ -149,7 +150,7 @@ app.whenReady().then(async () => {
   privacyManager.initialize(settings, torManager);
 
   // Enregistrer les IPC update (check manuel depuis Settings)
-  registerUpdaterIpc();
+  registerUpdaterIpc(() => mainWindow);
 
   // Démarrer tor.exe si activé
   if (settings.torEnabled) {
@@ -163,10 +164,12 @@ app.whenReady().then(async () => {
   // En dev, runUpdater appelle onDone immédiatement
   runUpdater(() => {
     createWindow();
+    startBackgroundChecks(mainWindow);
   });
 });
 
 app.on('window-all-closed', async () => {
+  stopBackgroundChecks();
   await privacyManager.clearAllSensitiveData();
   if (torManager) await torManager.stopTor();
   if (process.platform !== 'darwin') app.quit();

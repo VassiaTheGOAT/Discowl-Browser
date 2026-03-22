@@ -559,6 +559,47 @@ const T_TOR = {
 };
 Object.entries(T_TOR).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
 
+
+// ── Always Private Mode keys ─────────────────────────────────
+const T_AP = {
+  en: {
+    'settings.always_private_group': 'Always Private Mode',
+    'settings.always_private':       'Force private browsing',
+    'settings.always_private_desc':  'All new tabs open in private mode automatically. History, cookies and cache are never saved.',
+    'toast.always_private_on':       'All tabs are now private',
+    'toast.always_private_off':      'Private mode deactivated',
+  },
+  fr: {
+    'settings.always_private_group': 'Mode toujours privé',
+    'settings.always_private':       'Navigation privée forcée',
+    'settings.always_private_desc':  'Tous les nouveaux onglets s\'ouvrent automatiquement en mode privé. L\'historique, les cookies et le cache ne sont jamais sauvegardés.',
+    'toast.always_private_on':       'Tous les onglets sont désormais privés',
+    'toast.always_private_off':      'Mode privé forcé désactivé',
+  },
+  es: {
+    'settings.always_private_group': 'Modo siempre privado',
+    'settings.always_private':       'Navegación privada forzada',
+    'settings.always_private_desc':  'Todas las pestañas nuevas se abren en modo privado automáticamente.',
+    'toast.always_private_on':       'Todas las pestañas son ahora privadas',
+    'toast.always_private_off':      'Modo privado forzado desactivado',
+  },
+  de: {
+    'settings.always_private_group': 'Immer privater Modus',
+    'settings.always_private':       'Privates Surfen erzwingen',
+    'settings.always_private_desc':  'Alle neuen Tabs öffnen sich automatisch im privaten Modus.',
+    'toast.always_private_on':       'Alle Tabs sind jetzt privat',
+    'toast.always_private_off':      'Erzwungener privater Modus deaktiviert',
+  },
+  it: {
+    'settings.always_private_group': 'Modalità sempre privata',
+    'settings.always_private':       'Navigazione privata forzata',
+    'settings.always_private_desc':  'Tutte le nuove schede si aprono automaticamente in modalità privata.',
+    'toast.always_private_on':       'Tutte le schede sono ora private',
+    'toast.always_private_off':      'Modalità privata forzata disattivata',
+  },
+};
+Object.entries(T_AP).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
+
 const i18n = (() => {
   let _lang = 'en';
 

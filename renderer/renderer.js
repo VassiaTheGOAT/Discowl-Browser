@@ -275,6 +275,12 @@ function _openDownloadsTab() {
    TAB MANAGEMENT
 ══════════════════════════════════════════════════════════════ */
 function createTab(url = 'about:newtab', isPrivate = false) {
+  // Si "Toujours en mode privé" est activé, forcer isPrivate
+  // Exception : ne pas forcer sur les pages internes (passwords, settings, etc.)
+  const internalPages = ['about:passwords', 'about:customize-toolbar', 'about:downloads'];
+  if (settings.alwaysPrivate && !internalPages.includes(url)) {
+    isPrivate = true;
+  }
   const id        = ++tabCounter;
   const partition = isPrivate
     ? `partition:private-${id}`  // Not persisted = private session
@@ -2520,6 +2526,32 @@ function applySettings(s) {
   if (s.theme) applyTheme(s.theme);
   // Fond homepage
   if (s.ntpBackground?.type) applyNtpBackground(s.ntpBackground);
+  // Mode toujours privé — indicateur visuel + refresh onglet actif
+  const wasAlwaysPrivate = !!document.body.classList.contains('always-private-mode');
+  const nowAlwaysPrivate = !!s.alwaysPrivate;
+  document.body.classList.toggle('always-private-mode', nowAlwaysPrivate);
+
+  // Refresh visuel de l'onglet homepage actif si le mode change
+  if (wasAlwaysPrivate !== nowAlwaysPrivate) {
+    const activeTab = getActiveTab();
+    if (activeTab && !activeTab.url) {
+      // Onglet homepage — mettre à jour le titre et les styles
+      activeTab.isPrivate = nowAlwaysPrivate;
+      updateNewtabMode(nowAlwaysPrivate);
+      refreshTab(activeTab.id);
+    }
+    // Mettre à jour le badge sur tous les onglets ouverts
+    tabs.forEach(tab => {
+      if (!tab.url && !tab.isFixed) {
+        // Onglets homepage — mettre à jour leur classe visuellement
+        const el = document.querySelector(`.tab[data-tab-id="${tab.id}"]`);
+        if (el) {
+          el.classList.toggle('private', nowAlwaysPrivate);
+          tab.isPrivate = nowAlwaysPrivate;
+        }
+      }
+    });
+  }
 
   // Barre des favoris
   const bmToolbar = document.getElementById('bookmarks-toolbar');

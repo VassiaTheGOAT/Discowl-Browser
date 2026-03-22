@@ -263,7 +263,7 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.3.2';
+      if (vEl) vEl.textContent = v || '1.3.3';
     }).catch(() => {});
 
     sec.appendChild(makeGroup(i18n.t('settings.application'), [
@@ -443,6 +443,18 @@ const SettingsManager = (() => {
         makeToggle('toggle-3p-cookies', !!_settings.blockThirdPartyCookies, v => {
           save({ blockThirdPartyCookies: v });
           showToast(i18n.t('toast.restart_apply'), 'info');
+        })
+      ),
+    ]));
+
+    sec.appendChild(makeGroup(i18n.t('settings.always_private_group'), [
+      makeRow(
+        i18n.t('settings.always_private'),
+        i18n.t('settings.always_private_desc'),
+        makeToggle('toggle-always-private', _settings.alwaysPrivate, v => {
+          save({ alwaysPrivate: v }).then(() => {
+            showToast(v ? i18n.t('toast.always_private_on') : i18n.t('toast.always_private_off'), 'info');
+          });
         })
       ),
     ]));

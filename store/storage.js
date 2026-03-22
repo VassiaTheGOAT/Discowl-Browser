@@ -130,6 +130,7 @@ class Storage {
       doh:                  true,
       blockFingerprinting:  false,
       ntpBackground:        { type: 'none', value: '' },
+      alwaysPrivate:        false,
       toolbarItems: [
         { id: 'back',       visible: true  },
         { id: 'forward',    visible: true  },

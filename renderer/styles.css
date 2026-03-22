@@ -2999,136 +2999,26 @@ body.window-maximized .rz { display: none; }
 .ntp-img-info { font-size: 10px; color: var(--text-muted); line-height: 1.4; }
 
 /* ══════════════════════════════════════════════════════════════
-   TOR INDICATOR — barre de navigation
+   NTP — Contraste du curseur et du texte selon la luminosité du fond
+   .ntp-light-bg est ajouté dynamiquement quand le fond est clair
 ══════════════════════════════════════════════════════════════ */
 
-.tor-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: rgba(139, 92, 246, .12);
-  border: 1px solid rgba(139, 92, 246, .28);
-  border-radius: 14px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #a78bfa;
-  user-select: none;
-  position: relative;
-  -webkit-app-region: no-drag;
-  flex-shrink: 0;
-  transition: background .2s, border-color .2s, color .2s;
+/* Fond clair → curseur noir, texte sombre */
+.newtab-page.ntp-light-bg .newtab-form input {
+  caret-color:        #1a1d2e;
+  color:              #1a1d2e;
+  background:         rgba(255,255,255,.75);
+  box-shadow:         0 4px 14px rgba(0,0,0,.12);
 }
-.tor-indicator.hidden { display: none !important; }
-
-/* États */
-.tor-indicator[data-state="connected"] {
-  background: rgba(52, 211, 153, .1);
-  border-color: rgba(52, 211, 153, .28);
-  color: #34d399;
+.newtab-page.ntp-light-bg .newtab-form input::placeholder {
+  color: rgba(26,29,46,.5);
 }
-.tor-indicator[data-state="error"] {
-  background: rgba(239, 68, 68, .1);
-  border-color: rgba(239, 68, 68, .28);
-  color: #f87171;
-}
-.tor-indicator[data-state="rotating"],
-.tor-indicator[data-state="connecting"] {
-  background: rgba(251, 191, 36, .1);
-  border-color: rgba(251, 191, 36, .28);
-  color: #fbbf24;
+.newtab-page.ntp-light-bg .newtab-form input:focus {
+  background:         rgba(255,255,255,.9);
+  box-shadow:         0 4px 20px rgba(0,0,0,.18), 0 0 0 3px rgba(12,192,223,.35);
 }
 
-/* Point d'état */
-.tor-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: background .2s, box-shadow .2s;
+/* Fond sombre / image → curseur blanc, texte clair (déjà géré par les vars) */
+.newtab-page:not(.ntp-light-bg) .newtab-form input {
+  caret-color: var(--newtab-input-color, #dde1f0);
 }
-.tor-dot-green {
-  background: #34d399;
-  box-shadow: 0 0 6px rgba(52,211,153,.6);
-}
-.tor-dot-yellow {
-  background: #fbbf24;
-  box-shadow: 0 0 6px rgba(251,191,36,.5);
-  animation: tor-pulse 1.2s ease-in-out infinite;
-}
-.tor-dot-red {
-  background: #f87171;
-  box-shadow: 0 0 5px rgba(248,113,113,.5);
-}
-
-@keyframes tor-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: .5; transform: scale(.85); }
-}
-
-/* Spinner */
-.tor-spinner {
-  width: 11px; height: 11px;
-  border: 1.5px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: tor-spin .7s linear infinite;
-  flex-shrink: 0;
-}
-.tor-spinner.hidden { display: none; }
-@keyframes tor-spin { to { transform: rotate(360deg); } }
-
-/* Label */
-.tor-label {
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .01em;
-}
-
-/* Circuit number */
-.tor-circuit {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  opacity: .7;
-  white-space: nowrap;
-}
-
-/* Bouton new circuit */
-.tor-new-circuit-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px; height: 20px;
-  background: none;
-  border: none;
-  border-radius: 5px;
-  color: inherit;
-  cursor: pointer;
-  opacity: .75;
-  transition: opacity .12s, background .12s;
-  padding: 0;
-  flex-shrink: 0;
-}
-.tor-new-circuit-btn:hover:not(:disabled) {
-  opacity: 1;
-  background: rgba(255,255,255,.12);
-}
-.tor-new-circuit-btn:disabled {
-  opacity: .3;
-  cursor: not-allowed;
-}
-
-/* Barre de cooldown (en bas de l'indicateur) */
-.tor-newnym-progress {
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  background: currentColor;
-  border-radius: 0 0 14px 14px;
-  width: 0%;
-  opacity: .45;
-}
-.tor-newnym-progress.hidden { display: none; }

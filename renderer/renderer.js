@@ -2404,6 +2404,18 @@ function initNtpBackground() {
   }
 }
 
+/* ── Calculer la luminance d'une couleur hex ─────────────── */
+function _getLuminance(hex) {
+  const h = hex.replace('#', '');
+  if (h.length < 6) return 0;
+  const r = parseInt(h.slice(0,2),16) / 255;
+  const g = parseInt(h.slice(2,4),16) / 255;
+  const b = parseInt(h.slice(4,6),16) / 255;
+  // Formule sRGB → luminance relative
+  const toLinear = x => x <= 0.03928 ? x/12.92 : Math.pow((x+0.055)/1.055, 2.4);
+  return 0.2126*toLinear(r) + 0.7152*toLinear(g) + 0.0722*toLinear(b);
+}
+
 /* ── Appliquer le fond sur le DOM ─────────────────────────── */
 function applyNtpBackground(cfg) {
   const ntpEl = document.getElementById('new-tab-page');
@@ -2429,6 +2441,31 @@ function applyNtpBackground(cfg) {
     ntpEl.style.backgroundImage = '';
     ntpEl.style.backgroundColor = '';
   }
+
+  // Adapter le curseur et la couleur du texte de l'input selon la luminosité du fond
+  _updateNtpInputContrast(cfg);
+}
+
+function _updateNtpInputContrast(cfg) {
+  const ntpEl = document.getElementById('new-tab-page');
+  if (!ntpEl) return;
+
+  let isLight = false; // fond sombre par défaut
+
+  if (cfg.type === 'color' && cfg.value) {
+    const lum = _getLuminance(cfg.value);
+    isLight = lum > 0.4; // seuil : fond clair si luminance > 40%
+  } else if (cfg.type === 'image') {
+    // Pour les images, on ne peut pas détecter facilement la luminosité
+    // On laisse l'utilisateur gérer — curseur blanc par défaut sur image
+    isLight = false;
+  } else {
+    // Fond par défaut — dépend du thème
+    isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  }
+
+  // Appliquer la classe CSS qui change caret-color et color de l'input
+  ntpEl.classList.toggle('ntp-light-bg', isLight);
 }
 
 /* ── Sauvegarder dans les settings ───────────────────────── */

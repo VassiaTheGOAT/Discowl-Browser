@@ -392,7 +392,7 @@ ipcMain.handle('settings:save', async (_, newSettings) => {
     'blockAds','doNotTrack','saveCookies','toolbarItems','customTitlebar',
     'blockTrackers','httpsUpgrade','strictReferrer','blockWebRTC',
     'clearOnExit','doh','blockFingerprinting','blockThirdPartyCookies',
-    'blockYoutubeAds','privacyLevel','proxy',
+    'blockYoutubeAds','privacyLevel','proxy','ntpBackground','alwaysPrivate',
   ]);
   const safe = {};
   for (const [k, v] of Object.entries(newSettings)) {

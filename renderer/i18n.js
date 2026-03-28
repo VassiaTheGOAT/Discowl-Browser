@@ -740,6 +740,105 @@ const T_BM2 = {
 };
 Object.entries(T_BM2).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
 
+
+// ── Context menu webview — FR + IT (manquants) ───────────────
+const T_CTX_FRIT = {
+  fr: {
+    'ctx.open_link_tab':     'Ouvrir le lien dans un nouvel onglet',
+    'ctx.open_link_private': 'Ouvrir le lien en mode privé',
+    'ctx.copy_link':         'Copier l’adresse du lien',
+    'ctx.copy_text':         'Copier le texte sélectionné',
+    'ctx.open_image_tab':    'Ouvrir l’image dans un nouvel onglet',
+    'ctx.save_image':        'Enregistrer l’image sous…',
+    'ctx.copy_image_url':    'Copier l’adresse de l’image',
+    'ctx.save_media':        'Enregistrer le média',
+    'ctx.copy_media_url':    'Copier l’adresse du média',
+    'ctx.undo':              'Annuler',
+    'ctx.redo':              'Rétablir',
+    'ctx.cut':               'Couper',
+    'ctx.copy':              'Copier',
+    'ctx.paste':             'Coller',
+    'ctx.select_all':        'Tout sélectionner',
+    'ctx.search_for':        'Rechercher « {q} »',
+    'ctx.back':              'Page précédente',
+    'ctx.forward':           'Page suivante',
+    'ctx.reload':            'Actualiser la page',
+    'ctx.bookmark_page':     'Ajouter cette page aux favoris',
+    'ctx.save_page':         'Enregistrer la page sous…',
+    'ctx.print':             'Imprimer…',
+    'ctx.view_source':       'Afficher le code source',
+    'ctx.inspect':           'Inspecter',
+  },
+  it: {
+    'ctx.open_link_tab':     'Apri link in nuova scheda',
+    'ctx.open_link_private': 'Apri link in modalità privata',
+    'ctx.copy_link':         'Copia indirizzo del link',
+    'ctx.copy_text':         'Copia testo selezionato',
+    'ctx.open_image_tab':    'Apri immagine in nuova scheda',
+    'ctx.save_image':        'Salva immagine come…',
+    'ctx.copy_image_url':    'Copia indirizzo immagine',
+    'ctx.save_media':        'Salva media',
+    'ctx.copy_media_url':    'Copia indirizzo media',
+    'ctx.undo':              'Annulla',
+    'ctx.redo':              'Ripristina',
+    'ctx.cut':               'Taglia',
+    'ctx.copy':              'Copia',
+    'ctx.paste':             'Incolla',
+    'ctx.select_all':        'Seleziona tutto',
+    'ctx.search_for':        'Cerca «{q}»',
+    'ctx.back':              'Pagina precedente',
+    'ctx.forward':           'Pagina successiva',
+    'ctx.reload':            'Ricarica pagina',
+    'ctx.bookmark_page':     'Aggiungi ai segnalibri',
+    'ctx.save_page':         'Salva pagina come…',
+    'ctx.print':             'Stampa…',
+    'ctx.view_source':       'Visualizza sorgente',
+    'ctx.inspect':           'Ispeziona',
+  },
+};
+Object.entries(T_CTX_FRIT).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
+
+// ── Always Private Mode keys ─────────────────────────────────
+const T_AP = {
+  en: {
+    'settings.always_private_group': 'Always Private Mode',
+    'settings.always_private':       'Force private browsing',
+    'settings.always_private_desc':  'All new tabs open in private mode automatically. History, cookies and cache are never saved.',
+    'toast.always_private_on':       'All tabs are now private',
+    'toast.always_private_off':      'Private mode deactivated',
+  },
+  fr: {
+    'settings.always_private_group': 'Mode toujours privé',
+    'settings.always_private':       'Toujours en mode privé',
+    'settings.always_private_desc':  'Tous les nouveaux onglets s\'ouvrent en mode privé. Rien n\'est conservé : ni historique, ni cookies, ni cache.',
+    'toast.always_private_on':       'Tous les onglets sont désormais privés',
+    'toast.always_private_off':      'Mode privé forcé désactivé',
+  },
+  es: {
+    'settings.always_private_group': 'Modo siempre privado',
+    'settings.always_private':       'Navegación privada forzada',
+    'settings.always_private_desc':  'Todas las pestañas nuevas se abren en modo privado automáticamente.',
+    'toast.always_private_on':       'Todas las pestañas son ahora privadas',
+    'toast.always_private_off':      'Modo privado forzado desactivado',
+  },
+  de: {
+    'settings.always_private_group': 'Immer privater Modus',
+    'settings.always_private':       'Privates Surfen erzwingen',
+    'settings.always_private_desc':  'Alle neuen Tabs öffnen sich automatisch im privaten Modus.',
+    'toast.always_private_on':       'Alle Tabs sind jetzt privat',
+    'toast.always_private_off':      'Erzwungener privater Modus deaktiviert',
+  },
+  it: {
+    'settings.always_private_group': 'Modalità sempre privata',
+    'settings.always_private':       'Navigazione privata forzata',
+    'settings.always_private_desc':  'Tutte le nuove schede si aprono automaticamente in modalità privata.',
+    'toast.always_private_on':       'Tutte le schede sono ora private',
+    'toast.always_private_off':      'Modalità privata forzata disattivata',
+  },
+};
+Object.entries(T_AP).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
+
+
 const i18n = (() => {
   let _lang = 'en';
 

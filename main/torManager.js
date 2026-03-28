@@ -17,6 +17,7 @@
  *   Rate-limité par Tor lui-même (max 1 toutes les 10s).
  */
 
+const { app }     = require('electron');
 const { spawn }   = require('child_process');
 const path        = require('path');
 const net         = require('net');
@@ -42,13 +43,45 @@ class TorManager {
     this._circuitId    = 0;     // compteur de circuits
 
     const bin = process.platform === 'win32' ? 'tor.exe' : 'tor';
-    this.torBinPath = path.resolve(__dirname, '..', 'tor', 'tor', bin);
 
-    // Dossier de données Tor (cookie auth)
-    this.torDataDir = path.resolve(__dirname, '..', 'tor', 'data');
+    /*
+     * Résolution du chemin selon l'environnement :
+     *
+     * Dev  (app.isPackaged = false) :
+     *   __dirname = <racine>/main/
+     *   tor/      = <racine>/tor/
+     *   → path.resolve(__dirname, '..', 'tor', 'tor', bin)
+     *
+     * Prod (app.isPackaged = true) :
+     *   electron-builder copie extraResources dans resources/ (à côté de app.asar)
+     *   → process.resourcesPath + '/tor/tor/' + bin
+     *
+     * La structure attendue dans les deux cas :
+     *   tor/
+     *   └── tor/
+     *       └── tor.exe  (ou tor sur macOS/Linux)
+     */
+    if (app.isPackaged) {
+      // En prod :
+      //   Binaire  → resources/tor/tor/tor.exe   (extraResources, lecture seule OK)
+      //   DataDir  → userData/tor-data/            (répertoire utilisateur, écriture OK)
+      //
+      // resources/ peut être en lecture seule (macOS, Windows selon répertoire install)
+      // → le binaire Tor est OK en lecture seule
+      // → le cookie d'auth et les circuits Tor nécessitent l'écriture → userData
+      this.torBinPath = path.join(process.resourcesPath, 'tor', 'tor', bin);
+      this.torDataDir = path.join(app.getPath('userData'), 'tor-data');
+    } else {
+      // En dev : tout dans le projet
+      this.torBinPath = path.resolve(__dirname, '..', 'tor', 'tor', bin);
+      this.torDataDir = path.resolve(__dirname, '..', 'tor', 'data');
+    }
+
     this.cookiePath = path.join(this.torDataDir, 'control_auth_cookie');
 
     console.log('[Tor] Binaire :', this.torBinPath);
+    console.log('[Tor] resourcesPath :', process.resourcesPath);
+    console.log('[Tor] isPackaged :', app.isPackaged);
   }
 
   /* ══════════════════════════════════════════════════════════════

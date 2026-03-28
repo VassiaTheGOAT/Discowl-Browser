@@ -1728,6 +1728,224 @@ function showToolbarContextMenu(x, y) {
 /* ══════════════════════════════════════════════════════════════
    TOR UI — indicateur d'état + bouton New Circuit
 ══════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════
+   UPDATE NOTIFICATIONS — renderer.js integration
+   À appeler dans DOMContentLoaded après initCustomTitlebar().
+════════════════════════════════════════════════════════════════ */
+
+function initUpdateNotifications() {
+  // Écouter : mise à jour disponible → afficher toast
+  window.discowlAPI.updates.onAvailable(({ version, releaseNotes }) => {
+    _showUpdateToast({ phase: 'available', version });
+  });
+
+  // Progression du téléchargement
+  window.discowlAPI.updates.onDownloadProgress(({ percent, bytesPerSecond, transferred, total, version }) => {
+    _updateProgress({ percent, bytesPerSecond, transferred, total, version });
+  });
+
+  // Pause
+  window.discowlAPI.updates.onDownloadPaused(({ version }) => {
+    _setToastPhase('paused', version);
+  });
+
+  // Téléchargement terminé → bouton "Restart"
+  window.discowlAPI.updates.onReady(({ version }) => {
+    _setToastPhase('ready', version);
+  });
+
+  // Erreur téléchargement
+  window.discowlAPI.updates.onError(({ message }) => {
+    _setToastPhase('error', null);
+    console.error('[Update] Download error:', message);
+  });
+}
+
+/* ── Toast d'update ─────────────────────────────────────────── */
+
+let _toastEl   = null;
+let _smoothSpd = 0;
+let _lastBytes = 0;
+let _lastTime  = Date.now();
+
+function _showUpdateToast({ phase, version }) {
+  _removeToast();
+
+  const toast = document.createElement('div');
+  toast.id = 'update-toast';
+  toast.className = 'update-toast';
+  toast.dataset.phase = phase || 'available';
+
+  toast.innerHTML = `
+    <div class="ut-header">
+      <div class="ut-icon">⬆</div>
+      <div class="ut-info">
+        <div class="ut-title" id="ut-title">Update ${version} available</div>
+        <div class="ut-sub"  id="ut-sub">Download in background — your session is preserved</div>
+      </div>
+      <button class="ut-dismiss" id="ut-dismiss" title="Dismiss">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div class="ut-progress-wrap hidden" id="ut-progress-wrap">
+      <div class="ut-bar-track">
+        <div class="ut-bar-fill" id="ut-bar-fill"></div>
+      </div>
+      <div class="ut-meta-row">
+        <span class="ut-pct"   id="ut-pct"></span>
+        <span class="ut-speed" id="ut-speed"></span>
+        <span class="ut-size"  id="ut-size"></span>
+      </div>
+    </div>
+
+    <div class="ut-actions" id="ut-actions">
+      <button class="ut-btn ut-btn-primary"   id="ut-download">Download</button>
+      <button class="ut-btn ut-btn-secondary" id="ut-defer">Later</button>
+    </div>
+  `;
+
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+
+  // Dismiss
+  toast.querySelector('#ut-dismiss').addEventListener('click', () => {
+    _removeToast();
+    window.discowlAPI.updates.defer();
+  });
+
+  // Bouton Download
+  const dlBtn = toast.querySelector('#ut-download');
+  dlBtn.addEventListener('click', () => {
+    _setToastPhase('downloading', version);
+    window.discowlAPI.updates.download();
+  });
+
+  // Bouton Later
+  toast.querySelector('#ut-defer').addEventListener('click', () => {
+    _removeToast();
+    window.discowlAPI.updates.defer();
+  });
+}
+
+function _setToastPhase(phase, version) {
+  if (!_toastEl) return;
+  _toastEl.dataset.phase = phase;
+
+  const title   = _toastEl.querySelector('#ut-title');
+  const sub     = _toastEl.querySelector('#ut-sub');
+  const actions = _toastEl.querySelector('#ut-actions');
+  const progWrap= _toastEl.querySelector('#ut-progress-wrap');
+  const fill    = _toastEl.querySelector('#ut-bar-fill');
+
+  switch (phase) {
+    case 'downloading':
+      if (title) title.textContent = `Downloading Discowl ${version || ''}…`;
+      if (sub)   sub.textContent   = 'Download in background — safe to keep browsing';
+      if (progWrap) progWrap.classList.remove('hidden');
+      if (actions) actions.innerHTML = `
+        <button class="ut-btn ut-btn-pause" id="ut-pause">⏸ Pause</button>
+        <button class="ut-btn ut-btn-cancel" id="ut-cancel-dl">✕ Cancel</button>
+      `;
+      _toastEl.querySelector('#ut-pause')?.addEventListener('click', () => {
+        window.discowlAPI.updates.pause();
+      });
+      _toastEl.querySelector('#ut-cancel-dl')?.addEventListener('click', () => {
+        window.discowlAPI.updates.cancel();
+        _removeToast();
+      });
+      break;
+
+    case 'paused':
+      if (title) title.textContent = `Download paused`;
+      if (sub)   sub.textContent   = 'Click Resume to continue';
+      if (actions) actions.innerHTML = `
+        <button class="ut-btn ut-btn-primary" id="ut-resume">▶ Resume</button>
+        <button class="ut-btn ut-btn-cancel"  id="ut-cancel-dl2">✕ Cancel</button>
+      `;
+      _toastEl.querySelector('#ut-resume')?.addEventListener('click', () => {
+        _setToastPhase('downloading', version);
+        window.discowlAPI.updates.resume();
+      });
+      _toastEl.querySelector('#ut-cancel-dl2')?.addEventListener('click', () => {
+        window.discowlAPI.updates.cancel();
+        _removeToast();
+      });
+      break;
+
+    case 'ready':
+      if (title) title.textContent = `Update ${version || ''} ready to install`;
+      if (sub)   sub.textContent   = 'Restart Discowl to apply the update';
+      if (fill)  fill.style.width  = '100%';
+      if (actions) actions.innerHTML = `
+        <button class="ut-btn ut-btn-primary"   id="ut-install">Restart & Install</button>
+        <button class="ut-btn ut-btn-secondary" id="ut-defer-ready">Later</button>
+      `;
+      _toastEl.querySelector('#ut-install')?.addEventListener('click', () => {
+        window.discowlAPI.updates.install();
+      });
+      _toastEl.querySelector('#ut-defer-ready')?.addEventListener('click', _removeToast);
+      break;
+
+    case 'error':
+      if (title) title.textContent = 'Update failed';
+      if (sub)   sub.textContent   = 'Check your connection and try again later';
+      if (progWrap) progWrap.classList.add('hidden');
+      if (actions) actions.innerHTML = `
+        <button class="ut-btn ut-btn-secondary" id="ut-dismiss-err">Dismiss</button>
+      `;
+      _toastEl.querySelector('#ut-dismiss-err')?.addEventListener('click', _removeToast);
+      break;
+  }
+}
+
+function _updateProgress({ percent, bytesPerSecond, transferred, total, version }) {
+  if (!_toastEl) return;
+  const pct   = Math.round(percent);
+  const now   = Date.now();
+  const dt    = (now - _lastTime) / 1000;
+
+  // EMA lissage vitesse
+  if (dt > 0.3) {
+    const raw = (transferred - _lastBytes) / dt;
+    _smoothSpd = _smoothSpd * 0.6 + raw * 0.4;
+    _lastBytes = transferred;
+    _lastTime  = now;
+  }
+
+  const fill  = _toastEl.querySelector('#ut-bar-fill');
+  const pctEl = _toastEl.querySelector('#ut-pct');
+  const spdEl = _toastEl.querySelector('#ut-speed');
+  const szEl  = _toastEl.querySelector('#ut-size');
+
+  if (fill)  fill.style.width = pct + '%';
+  if (pctEl) pctEl.textContent = pct + '%';
+
+  const fmt = b => {
+    if (!b) return '';
+    if (b < 1048576) return (b/1024).toFixed(0) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+  };
+
+  if (spdEl) spdEl.textContent = fmt(_smoothSpd) + '/s';
+  if (szEl)  szEl.textContent  = fmt(transferred) + ' / ' + fmt(total);
+}
+
+function _removeToast() {
+  if (_toastEl) {
+    _toastEl.classList.remove('show');
+    setTimeout(() => { _toastEl?.remove(); _toastEl = null; }, 250);
+  }
+}
+
+// Proxy pour accès depuis _showUpdateToast
+Object.defineProperty(window, '_getToastEl', { get: () => document.getElementById('update-toast') });
+Object.defineProperty(window, '_toastElProxy', {
+  get: () => document.getElementById('update-toast'),
+  set: () => {}
+});
+// Fix: on definit _toastEl via closure (le code ci-dessus y accède directement)
+
 function initTorUI() {
   if (!settings.torEnabled) return;
 

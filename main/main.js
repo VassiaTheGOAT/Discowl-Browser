@@ -306,39 +306,36 @@ function createWindow() {
 ipcMain.handle('favorites:get', () => storage.getFavorites());
 
 ipcMain.handle('favorites:save', (_, bookmarks) => {
-  // Validation stricte — jamais de données arbitraires en JSON
-  if (!Array.isArray(bookmarks)) return false;
-  if (bookmarks.length > 10000) return false;
-  const ALLOWED_TYPES = new Set(['bookmark', 'folder']);
-  function sanitizeNode(node, depth = 0) {
-    if (!node || typeof node !== 'object' || Array.isArray(node)) return null;
-    if (depth > 10) return null; // max nesting
-    const clean = {
-      id:      typeof node.id      === 'string' ? node.id.slice(0, 64)    : String(Date.now()),
-      title:   typeof node.title   === 'string' ? node.title.slice(0, 512) : '',
-      type:    ALLOWED_TYPES.has(node.type) ? node.type : 'bookmark',
-      toolbar: !!node.toolbar,
-    };
-    if (clean.type === 'bookmark') {
-      if (typeof node.url !== 'string') return null;
-      try {
-        const u = new URL(node.url);
-        if (!['https:','http:','file:'].includes(u.protocol)) return null;
-      } catch { return null; }
-      clean.url = node.url.slice(0, 2048);
-      clean.favicon = typeof node.favicon === 'string' ? node.favicon.slice(0, 512) : '';
+  if (!Array.isArray(bookmarks)) return;
+
+  // Validation récursive du nouveau format (avec tags, visitCount, etc.)
+  function validateItem(item) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    if (!['bookmark', 'folder', 'separator'].includes(item.type)) return false;
+    if (typeof item.title !== 'string' || item.title.length > 500) return false;
+    if (item.type === 'bookmark') {
+      if (typeof item.url !== 'string' || item.url.length > 2048) return false;
     }
-    if (clean.type === 'folder' && Array.isArray(node.children)) {
-      clean.children = node.children.map(ch => sanitizeNode(ch, depth + 1)).filter(Boolean);
-    } else {
-      clean.children = [];
+    // Valider tags
+    if (item.tags !== undefined) {
+      if (!Array.isArray(item.tags)) return false;
+      if (item.tags.some(t => typeof t !== 'string' || t.length > 100)) return false;
     }
-    return clean;
+    // Valider champs numériques
+    if (item.visitCount !== undefined && typeof item.visitCount !== 'number') return false;
+    if (item.visitedAt  !== undefined && typeof item.visitedAt  !== 'number') return false;
+    if (item.createdAt  !== undefined && typeof item.createdAt  !== 'number') return false;
+    if (item.position   !== undefined && typeof item.position   !== 'number') return false;
+    // Récursif pour les enfants
+    if (item.children) {
+      if (!Array.isArray(item.children)) return false;
+      if (!item.children.every(validateItem)) return false;
+    }
+    return true;
   }
-  const safe = bookmarks.map(b => sanitizeNode(b)).filter(Boolean);
-  storage.saveFavorites(safe);
-  BrowserWindow.getAllWindows().forEach(w => w.webContents.send('favorites:updated', safe));
-  return true;
+
+  if (!bookmarks.every(validateItem)) return;
+  storage.saveFavorites(bookmarks);
 });
 
 /* ══════════════════════════════════════════════════════════════

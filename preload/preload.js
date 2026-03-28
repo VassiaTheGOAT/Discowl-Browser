@@ -116,13 +116,36 @@ contextBridge.exposeInMainWorld('discowlAPI', {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
   },
 
-  /* ── Updates ────────────────────────────────────────────── */
+  /* ── Updates ─────────────────────────────────────────────── */
   updates: {
-    check:   ()   => ipcRenderer.invoke('update:check'),
-    install: ()   => ipcRenderer.invoke('update:install'),
-    onAvailable: (cb) => ipcRenderer.on('update:available', (_, d) => cb(d)),
-    onProgress:  (cb) => ipcRenderer.on('update:progress',  (_, d) => cb(d)),
-    onReady:     (cb) => ipcRenderer.on('update:ready',     (_, d) => cb(d))
+    check:    ()  => ipcRenderer.invoke('update:check'),
+    download: ()  => ipcRenderer.invoke('update:download'),
+    pause:    ()  => ipcRenderer.invoke('update:pause'),
+    resume:   ()  => ipcRenderer.invoke('update:resume'),
+    cancel:   ()  => ipcRenderer.invoke('update:cancel'),
+    install:  ()  => ipcRenderer.invoke('update:install'),
+    defer:    ()  => ipcRenderer.invoke('update:defer'),
+    getState: ()  => ipcRenderer.invoke('update:state'),
+    onAvailable: (cb) => {
+      ipcRenderer.removeAllListeners('updater:update-available');
+      ipcRenderer.on('updater:update-available', (_, d) => cb(d));
+    },
+    onDownloadProgress: (cb) => {
+      ipcRenderer.removeAllListeners('updater:download-progress');
+      ipcRenderer.on('updater:download-progress', (_, d) => cb(d));
+    },
+    onDownloadPaused: (cb) => {
+      ipcRenderer.removeAllListeners('updater:download-paused');
+      ipcRenderer.on('updater:download-paused', (_, d) => cb(d));
+    },
+    onReady: (cb) => {
+      ipcRenderer.removeAllListeners('updater:update-ready');
+      ipcRenderer.on('updater:update-ready', (_, d) => cb(d));
+    },
+    onError: (cb) => {
+      ipcRenderer.removeAllListeners('updater:download-error');
+      ipcRenderer.on('updater:download-error', (_, d) => cb(d));
+    },
   },
 
   /* ── Downloads ───────────────────────────────────────────── */

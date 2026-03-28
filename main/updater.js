@@ -1,92 +1,117 @@
 'use strict';
 
 /**
- * updater.js — Système de mise à jour production (electron-updater)
+ * updater.js — Système de mise à jour production — Discowl Browser
  *
- * Architecture :
- *   Phase 1 : Splash de démarrage → check silencieux
- *             Si MAJ dispo → téléchargement avec progression
- *             Si à jour ou erreur → lancement immédiat de l'app
- *
- *   Phase 2 : Vérification périodique en arrière-plan (toutes les 4h)
- *             Notification toast non-intrusive si MAJ disponible
- *             L'utilisateur choisit quand installer
- *
- * Sécurité :
- *   - electron-updater vérifie le SHA512 de chaque asset via latest.yml
- *   - HTTPS imposé par electron-updater (GitHub Releases)
- *   - Signature de code recommandée (voir DEPLOYMENT.md)
- *
- * Environnements :
- *   - dev  (app.isPackaged = false) → skip complet, lancement direct
- *   - prod (app.isPackaged = true)  → flux complet
+ * ┌─────────────────────────────────────────────────────────────────┐
+ * │  ARCHITECTURE                                                    │
+ * │                                                                  │
+ * │  Phase 1 — DÉMARRAGE (bloquant, splash)                         │
+ * │    Splash → checkForUpdates()                                    │
+ * │    ├── À jour        → fermer splash → lancer app               │
+ * │    ├── MAJ dispo     → télécharger → installer → relancer        │
+ * │    └── Erreur/Timeout→ fermer splash → lancer app               │
+ * │                                                                  │
+ * │  Phase 2 — ARRIÈRE-PLAN (non-bloquant, toutes les 4h)           │
+ * │    Background check → si MAJ → toast dans l'app                 │
+ * │    Toast → [Télécharger] → barre de progression dans l'app      │
+ * │    Barre → [Installer maintenant] → redémarrer                  │
+ * │                                     [Plus tard]  → fermer       │
+ * │                                     [Annuler]    → stopper DL   │
+ * │                                                                  │
+ * │  Sécurité :                                                      │
+ * │    ─ electron-updater vérifie SHA512 via latest.yml              │
+ * │    ─ HTTPS imposé (GitHub Releases)                              │
+ * │    ─ Semver strict anti-boucle                                   │
+ * │    ─ Purge cache pending au démarrage                            │
+ * │    ─ CancellationToken pour annulation propre                    │
+ * └─────────────────────────────────────────────────────────────────┘
  */
 
-const { autoUpdater }         = require('electron-updater');
-const { BrowserWindow, ipcMain, app } = require('electron');
-const path  = require('path');
-const log   = require('./updateLogger');
+const { autoUpdater, CancellationToken } = require('electron-updater');
+const { BrowserWindow, ipcMain, app }    = require('electron');
+const path = require('path');
+const fs   = require('fs');
+const log  = require('./updateLogger');
 
-// Compare deux versions semver — retourne true si b > a STRICTEMENT
-function _isNewer(a, b) {
-  const pa = String(a).replace(/^v/, '').split('.').map(Number);
-  const pb = String(b).replace(/^v/, '').split('.').map(Number);
+/* ══════════════════════════════════════════════════════════════════
+   SEMVER — comparaison stricte
+══════════════════════════════════════════════════════════════════ */
+
+function _isNewer(current, candidate) {
+  const pa = String(current  || '0').replace(/^v/, '').split('.').map(Number);
+  const pb = String(candidate|| '0').replace(/^v/, '').split('.').map(Number);
   for (let i = 0; i < 3; i++) {
-    const na = pa[i] || 0, nb = pb[i] || 0;
-    if (nb > na) return true;
-    if (nb < na) return false;
+    if ((pb[i] || 0) > (pa[i] || 0)) return true;
+    if ((pb[i] || 0) < (pa[i] || 0)) return false;
   }
-  return false; // égaux → pas de mise à jour
+  return false; // strictement égal = pas de MAJ
 }
 
-/* ══════════════════════════════════════════════════════════════
-   CONFIGURATION electron-updater
-══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   ÉTAT GLOBAL
+══════════════════════════════════════════════════════════════════ */
 
-function configureUpdater() {
-  // Brancher le logger dédié
+let _mainWindowRef     = null;  // référence à la fenêtre principale
+let _splashWin         = null;  // fenêtre splash de démarrage
+let _onDone            = null;  // callback après splash
+
+// État téléchargement arrière-plan
+let _dlToken       = null;   // CancellationToken courant
+let _dlState       = 'idle'; // 'idle' | 'downloading' | 'paused' | 'ready'
+let _dlVersion     = null;   // version en cours de téléchargement
+let _dlPausedPct   = 0;      // % au moment de la pause (pour affichage)
+
+// Timers arrière-plan
+let _bgTimer    = null;
+let _bgInterval = null;
+
+const BACKGROUND_INITIAL_DELAY  = 30_000;        // 30s après lancement
+const BACKGROUND_CHECK_INTERVAL = 4 * 3600_000;  // 4 heures
+
+/* ══════════════════════════════════════════════════════════════════
+   CONFIGURATION electron-updater
+══════════════════════════════════════════════════════════════════ */
+
+function _configure() {
   autoUpdater.logger = log;
 
-  // Purger le cache updater au démarrage pour éviter la boucle infinie.
-  // electron-updater garde le .exe téléchargé dans userData/pending/.
-  // Au redémarrage post-install, il le trouve et re-déclenche update-downloaded.
-  try {
-    const pendingDir = path.join(app.getPath('userData'), '..', 'discowl-browser-updater', 'pending');
-    const altDir     = path.join(app.getPath('userData'), 'pending');
-    for (const dir of [pendingDir, altDir]) {
-      if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true });
-        log.info('[Updater] Cache pending supprimé:', dir);
-      }
-    }
-  } catch (e) {
-    log.warn('[Updater] Impossible de purger le cache:', e.message);
-  }
-
-  // Désactiver le téléchargement automatique :
-  // on gère la progression manuellement pour l'afficher dans le splash
-  autoUpdater.autoDownload = false;
-
-  // Ne pas installer silencieusement au quit en phase 1 (splash)
-  // On gère l'installation manuellement pour afficher un état propre
+  // Pas de téléchargement auto — on gère manuellement
+  autoUpdater.autoDownload         = false;
   autoUpdater.autoInstallOnAppQuit = false;
 
-  // Forcer HTTPS — electron-updater le fait nativement via GitHub Releases
-  // mais on logue pour traçabilité
-  log.info('[Updater] Configuration initialisée — channel:', autoUpdater.channel || 'latest');
+  // Purger le dossier pending/ pour éviter la boucle infinie
+  // (electron-updater y stocke le .exe et le re-détecte au démarrage)
+  _purgePendingCache();
+
+  log.info('[Updater] Configuré — channel:', autoUpdater.channel || 'latest');
 }
 
-/* ══════════════════════════════════════════════════════════════
+function _purgePendingCache() {
+  const dirs = [
+    path.join(app.getPath('userData'), '..', 'discowl-browser-updater', 'pending'),
+    path.join(app.getPath('userData'), 'pending'),
+  ];
+  for (const dir of dirs) {
+    try {
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        log.info('[Updater] Cache pending purgé:', dir);
+      }
+    } catch (e) {
+      log.warn('[Updater] Impossible de purger cache:', e.message);
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    FENÊTRE SPLASH
-══════════════════════════════════════════════════════════════ */
+══════════════════════════════════════════════════════════════════ */
 
-let splashWin = null;
-let _onDone   = null;
-
-function createSplash() {
-  splashWin = new BrowserWindow({
-    width:           460,
-    height:          280,
+function _createSplash() {
+  _splashWin = new BrowserWindow({
+    width:           480,
+    height:          300,
     resizable:       false,
     frame:           false,
     transparent:     false,
@@ -100,145 +125,145 @@ function createSplash() {
       contextIsolation: true,
       nodeIntegration:  false,
       sandbox:          false,
-    }
+    },
   });
 
-  splashWin.loadFile(path.join(__dirname, '../renderer/updater.html'));
-  splashWin.once('ready-to-show', () => splashWin?.show());
-  splashWin.on('closed', () => { splashWin = null; });
+  _splashWin.loadFile(path.join(__dirname, '../renderer/updater.html'));
+  _splashWin.once('ready-to-show', () => _splashWin?.show());
+  _splashWin.on('closed', () => { _splashWin = null; });
 }
 
-function sendToSplash(type, payload = {}) {
-  if (splashWin && !splashWin.isDestroyed()) {
-    splashWin.webContents.send('updater:status', { type, ...payload });
+function _sendSplash(type, payload = {}) {
+  if (_splashWin && !_splashWin.isDestroyed()) {
+    _splashWin.webContents.send('updater:status', { type, ...payload });
   }
 }
 
-function closeSplashAndLaunch(delay = 600) {
+function _closeSplash(delay = 600) {
   setTimeout(() => {
-    if (splashWin && !splashWin.isDestroyed()) {
-      splashWin.close();
-      splashWin = null;
+    if (_splashWin && !_splashWin.isDestroyed()) {
+      _splashWin.close();
+      _splashWin = null;
     }
     _onDone?.();
+    _onDone = null;
   }, delay);
 }
 
-/* ══════════════════════════════════════════════════════════════
-   PHASE 1 — VÉRIFICATION AU DÉMARRAGE (bloquante, avec splash)
-══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   PHASE 1 — CHECK AU DÉMARRAGE
+   Bloquant — le splash s'affiche pendant la vérification.
+   Si MAJ → téléchargement direct → installation → relance.
+   Si OK  → ferme le splash et lance l'app immédiatement.
+══════════════════════════════════════════════════════════════════ */
 
 function runUpdater(onDone) {
   _onDone = onDone;
 
-  // Environnement développement → lancement immédiat
   if (!app.isPackaged) {
-    log.info('[Updater] Mode dev — skip update check');
+    log.info('[Updater] Mode dev — skip');
     onDone();
     return;
   }
 
-  configureUpdater();
-  createSplash();
+  _configure();
+  _createSplash();
 
-  splashWin.webContents.once('did-finish-load', () => {
-    _runStartupCheck();
-  });
+  _splashWin.webContents.once('did-finish-load', _startupCheck);
 }
 
-function _runStartupCheck() {
-  log.info('[Updater] Démarrage — vérification de mise à jour...');
-  sendToSplash('checking');
+function _startupCheck() {
+  log.info('[Updater] Check démarrage...');
+  _sendSplash('checking');
 
-  // Timeout de sécurité : si le check dépasse 15s (réseau lent/absent), on lance quand même
-  const networkTimeout = setTimeout(() => {
-    log.warn('[Updater] Check timeout — lancement sans mise à jour');
-    sendToSplash('timeout');
-    closeSplashAndLaunch(400);
-  }, 15000);
+  // Timeout réseau : si aucune réponse en 15s, on lance quand même
+  const netTimeout = setTimeout(() => {
+    log.warn('[Updater] Timeout réseau — lancement sans MAJ');
+    _sendSplash('timeout');
+    _closeSplash(400);
+  }, 15_000);
 
-  // Écouter les événements electron-updater pour ce check de démarrage
-  const cleanup = _bindStartupEvents(networkTimeout);
+  const cleanup = _bindSplashListeners(netTimeout);
 
   autoUpdater.checkForUpdates().catch(err => {
-    clearTimeout(networkTimeout);
+    clearTimeout(netTimeout);
     cleanup();
-    log.error('[Updater] checkForUpdates error:', err.message);
-    sendToSplash('error', { message: err.message });
-    closeSplashAndLaunch(800);
+    log.error('[Updater] checkForUpdates:', err.message);
+    _sendSplash('error', { message: err.message });
+    _closeSplash(800);
   });
 }
 
-function _bindStartupEvents(networkTimeout) {
-  // Retourne une fonction cleanup pour détacher les listeners après usage
+function _bindSplashListeners(netTimeout) {
+  const current = app.getVersion().replace(/^v/, '');
 
-  function onNotAvailable(info) {
-    clearTimeout(networkTimeout);
+  function onNotAvailable() {
+    clearTimeout(netTimeout);
     cleanup();
-    log.info('[Updater] À jour — version', app.getVersion());
-    sendToSplash('not-available');
-    closeSplashAndLaunch(700);
+    log.info('[Updater] À jour —', current);
+    _sendSplash('not-available');
+    _closeSplash(700);
   }
 
   function onAvailable(info) {
-    clearTimeout(networkTimeout);
-    log.info('[Updater] Mise à jour disponible —', info.version);
+    clearTimeout(netTimeout);
 
-    // Vérification anti-boucle : la version disponible doit être
-    // STRICTEMENT supérieure à la version courante installée.
-    const current = app.getVersion().replace(/^v/, '');
-    const available = (info.version || '').replace(/^v/, '');
-    if (!_isNewer(current, available)) {
-      log.info('[Updater] Version disponible', available, '<= version courante', current, '— skip');
-      sendToSplash('not-available');
-      closeSplashAndLaunch(700);
+    // Guard anti-boucle : version doit être STRICTEMENT supérieure
+    const candidate = (info.version || '').replace(/^v/, '');
+    if (!_isNewer(current, candidate)) {
+      log.info('[Updater] Version', candidate, '<= courante', current, '— skip');
       cleanup();
+      _sendSplash('not-available');
+      _closeSplash(700);
       return;
     }
 
-    sendToSplash('available', { version: info.version, releaseNotes: info.releaseNotes });
+    log.info('[Updater] MAJ disponible:', candidate);
+    _sendSplash('available', { version: info.version });
 
-    // Démarrer le téléchargement
-    autoUpdater.downloadUpdate().catch(err => {
+    // Lancer le téléchargement avec CancellationToken
+    const token = new CancellationToken();
+    _dlToken   = token;
+    _dlVersion = candidate;
+
+    autoUpdater.downloadUpdate(token).catch(err => {
+      if (token.cancelled) return; // annulation intentionnelle → ignorer
       cleanup();
-      log.error('[Updater] Download error:', err.message);
-      sendToSplash('error', { message: err.message });
-      closeSplashAndLaunch(800);
+      log.error('[Updater] Téléchargement splash:', err.message);
+      _sendSplash('error', { message: err.message });
+      _closeSplash(800);
     });
   }
 
   function onProgress(progress) {
-    sendToSplash('progress', {
-      percent:       Math.round(progress.percent),
-      bytesPerSecond:progress.bytesPerSecond,
-      transferred:   progress.transferred,
-      total:         progress.total,
+    _sendSplash('progress', {
+      percent:        Math.round(progress.percent),
+      bytesPerSecond: progress.bytesPerSecond,
+      transferred:    progress.transferred,
+      total:          progress.total,
     });
   }
 
   function onDownloaded(info) {
     cleanup();
-    log.info('[Updater] Téléchargement terminé —', info.version);
-    sendToSplash('downloaded', { version: info.version });
+    _dlToken = null;
+    log.info('[Updater] Téléchargement terminé:', info.version);
+    _sendSplash('downloaded', { version: info.version });
 
-    // Laisser l'UI afficher "Installing…" puis installer
+    // Laisser l'UI afficher "Installing…" 1.8s puis installer
     setTimeout(() => {
-      log.info('[Updater] Installation en cours...');
-      // setImmediateFeedback avant de quitter
+      log.info('[Updater] Installation...');
       autoUpdater.autoInstallOnAppQuit = true;
-      autoUpdater.quitAndInstall(
-        /* isSilent */ true,
-        /* isForceRunAfter */ true  // relancer l'app après install
-      );
+      autoUpdater.quitAndInstall(/* silent */ true, /* runAfter */ true);
     }, 1800);
   }
 
   function onError(err) {
-    clearTimeout(networkTimeout);
+    clearTimeout(netTimeout);
     cleanup();
-    log.error('[Updater] Erreur:', err.message);
-    sendToSplash('error', { message: err.message });
-    closeSplashAndLaunch(800);
+    log.error('[Updater] Erreur splash:', err.message);
+    _sendSplash('error', { message: err.message });
+    _closeSplash(800);
   }
 
   autoUpdater.on('update-not-available', onNotAvailable);
@@ -258,70 +283,57 @@ function _bindStartupEvents(networkTimeout) {
   return cleanup;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   PHASE 2 — VÉRIFICATION EN ARRIÈRE-PLAN (non-bloquante)
-   Démarre après que l'app principale est ouverte.
-   Toutes les 4h + au démarrage après 30s.
-══════════════════════════════════════════════════════════════ */
-
-const BACKGROUND_CHECK_INTERVAL = 4 * 60 * 60 * 1000; // 4 heures
-const BACKGROUND_INITIAL_DELAY  = 30 * 1000;           // 30s après lancement
-let _bgCheckTimer    = null;
-let _bgCheckInterval = null;
-let _mainWindowRef   = null;  // injecté depuis main.js
+/* ══════════════════════════════════════════════════════════════════
+   PHASE 2 — VÉRIFICATIONS EN ARRIÈRE-PLAN
+   Non-bloquant. Démarre 30s après l'ouverture de l'app.
+   Notifie la fenêtre principale via IPC si MAJ trouvée.
+══════════════════════════════════════════════════════════════════ */
 
 function startBackgroundChecks(mainWindow) {
   if (!app.isPackaged) return;
-
   _mainWindowRef = mainWindow;
 
-  // Premier check 30s après lancement (app complètement prête)
-  _bgCheckTimer = setTimeout(() => {
+  _bgTimer = setTimeout(() => {
     _backgroundCheck();
-    // Puis toutes les 4h
-    _bgCheckInterval = setInterval(_backgroundCheck, BACKGROUND_CHECK_INTERVAL);
+    _bgInterval = setInterval(_backgroundCheck, BACKGROUND_CHECK_INTERVAL);
   }, BACKGROUND_INITIAL_DELAY);
 }
 
 function stopBackgroundChecks() {
-  if (_bgCheckTimer)    clearTimeout(_bgCheckTimer);
-  if (_bgCheckInterval) clearInterval(_bgCheckInterval);
+  if (_bgTimer)    clearTimeout(_bgTimer);
+  if (_bgInterval) clearInterval(_bgInterval);
+  _bgTimer    = null;
+  _bgInterval = null;
 }
 
 function _backgroundCheck() {
-  log.info('[Updater] Vérification arrière-plan...');
+  // Ne pas checker si un téléchargement est en cours
+  if (_dlState === 'downloading' || _dlState === 'ready') return;
 
-  // Listener unique pour ce check — ne pas polluer avec des listeners permanents
-  let handled = false;
+  log.info('[Updater] Check arrière-plan...');
+  let done = false;
 
   function onAvailable(info) {
-    if (handled) return;
-    handled = true;
-    cleanup();
-    log.info('[Updater] MAJ disponible en arrière-plan —', info.version);
-
-    // Notifier l'app principale via IPC (toast non-intrusif)
-    if (_mainWindowRef && !_mainWindowRef.isDestroyed()) {
-      _mainWindowRef.webContents.send('updater:update-available', {
-        version:      info.version,
-        releaseNotes: info.releaseNotes,
-      });
-    }
+    if (done) return;
+    done = true; cleanup();
+    const candidate = (info.version || '').replace(/^v/, '');
+    const current   = app.getVersion().replace(/^v/, '');
+    if (!_isNewer(current, candidate)) return;
+    log.info('[Updater] Arrière-plan — MAJ:', candidate);
+    _dlVersion = candidate;
+    _notify({ type: 'updater:update-available', version: info.version, releaseNotes: info.releaseNotes });
   }
 
   function onNotAvailable() {
-    if (handled) return;
-    handled = true;
-    cleanup();
-    log.info('[Updater] Arrière-plan : déjà à jour');
+    if (done) return;
+    done = true; cleanup();
+    log.info('[Updater] Arrière-plan — déjà à jour');
   }
 
   function onError(err) {
-    if (handled) return;
-    handled = true;
-    cleanup();
-    log.warn('[Updater] Arrière-plan erreur (silencieuse):', err.message);
-    // Pas de notification — échec silencieux en arrière-plan
+    if (done) return;
+    done = true; cleanup();
+    log.warn('[Updater] Arrière-plan — erreur silencieuse:', err.message);
   }
 
   autoUpdater.on('update-available',     onAvailable);
@@ -334,54 +346,69 @@ function _backgroundCheck() {
     autoUpdater.removeListener('error',                onError);
   }
 
-  autoUpdater.checkForUpdates().catch(err => {
-    onError(err);
-  });
+  autoUpdater.checkForUpdates().catch(onError);
 }
 
-/* ══════════════════════════════════════════════════════════════
-   TÉLÉCHARGEMENT ARRIÈRE-PLAN (déclenché par l'utilisateur
-   depuis la notification toast)
-══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   TÉLÉCHARGEMENT EN ARRIÈRE-PLAN
+   Déclenché par l'utilisateur depuis la notification toast.
+   Envoie la progression à la fenêtre principale.
+══════════════════════════════════════════════════════════════════ */
 
-let _downloadProgress = null; // { percent, bytesPerSecond, transferred, total }
-let _isDownloading    = false;
-
-function startBackgroundDownload(mainWindow) {
-  if (_isDownloading) return;
-  _isDownloading = true;
-  _mainWindowRef = mainWindow;
-
+function _startBackgroundDownload() {
+  if (_dlState === 'downloading') return;
+  _dlState = 'downloading';
   log.info('[Updater] Téléchargement arrière-plan démarré');
 
+  const token = new CancellationToken();
+  _dlToken = token;
+
+  let smoothSpeed = 0;
+  let lastBytes   = 0;
+  let lastTime    = Date.now();
+
   function onProgress(progress) {
-    _downloadProgress = {
-      percent:       Math.round(progress.percent),
-      bytesPerSecond:progress.bytesPerSecond,
-      transferred:   progress.transferred,
-      total:         progress.total,
-    };
-    if (_mainWindowRef && !_mainWindowRef.isDestroyed()) {
-      _mainWindowRef.webContents.send('updater:download-progress', _downloadProgress);
+    if (_dlState !== 'downloading') return;
+
+    // EMA sur la vitesse pour éviter les sauts
+    const now = Date.now();
+    const dt  = (now - lastTime) / 1000;
+    if (dt > 0.3) {
+      const rawSpeed = (progress.transferred - lastBytes) / dt;
+      smoothSpeed = smoothSpeed * 0.65 + rawSpeed * 0.35;
+      lastBytes = progress.transferred;
+      lastTime  = now;
     }
+
+    _notify({
+      type:           'updater:download-progress',
+      percent:        Math.round(progress.percent),
+      bytesPerSecond: Math.round(smoothSpeed),
+      transferred:    progress.transferred,
+      total:          progress.total,
+      version:        _dlVersion,
+    });
   }
 
   function onDownloaded(info) {
     cleanup();
-    _isDownloading = false;
-    log.info('[Updater] Téléchargement terminé —', info.version);
-    if (_mainWindowRef && !_mainWindowRef.isDestroyed()) {
-      _mainWindowRef.webContents.send('updater:update-ready', { version: info.version });
-    }
+    _dlToken = null;
+    _dlState = 'ready';
+    log.info('[Updater] Téléchargement arrière-plan terminé:', info.version);
+    _notify({ type: 'updater:update-ready', version: info.version });
   }
 
   function onError(err) {
-    cleanup();
-    _isDownloading = false;
-    log.error('[Updater] Erreur téléchargement arrière-plan:', err.message);
-    if (_mainWindowRef && !_mainWindowRef.isDestroyed()) {
-      _mainWindowRef.webContents.send('updater:download-error', { message: err.message });
+    if (token.cancelled) {
+      // Annulation demandée par l'utilisateur → état idle ou paused
+      log.info('[Updater] Téléchargement annulé par l\'utilisateur');
+      return;
     }
+    cleanup();
+    _dlToken = null;
+    _dlState = 'idle';
+    log.error('[Updater] Erreur téléchargement arrière-plan:', err.message);
+    _notify({ type: 'updater:download-error', message: err.message });
   }
 
   autoUpdater.on('download-progress', onProgress);
@@ -394,61 +421,82 @@ function startBackgroundDownload(mainWindow) {
     autoUpdater.removeListener('error',             onError);
   }
 
-  autoUpdater.downloadUpdate().catch(onError);
+  autoUpdater.downloadUpdate(token).catch(onError);
 }
 
-/* ══════════════════════════════════════════════════════════════
-   IPC — HANDLERS (enregistrés dans main.js via registerIpc())
-══════════════════════════════════════════════════════════════ */
+function _cancelDownload() {
+  if (_dlToken) {
+    _dlToken.cancel();
+    _dlToken = null;
+  }
+  _dlState   = 'idle';
+  _dlPausedPct = 0;
+}
+
+function _pauseDownload() {
+  // electron-updater ne supporte pas la vraie reprise depuis un offset.
+  // On annule le téléchargement et on mémorise l'état "paused".
+  // À la reprise, le téléchargement redémarre (electron-updater utilise
+  // le blockmap différentiel → redémarre rapidement depuis le cache).
+  if (_dlState !== 'downloading' || !_dlToken) return;
+  _dlToken.cancel();
+  _dlToken    = null;
+  _dlState    = 'paused';
+  log.info('[Updater] Téléchargement mis en pause');
+  _notify({ type: 'updater:download-paused', version: _dlVersion });
+}
+
+function _resumeDownload() {
+  if (_dlState !== 'paused') return;
+  log.info('[Updater] Reprise du téléchargement');
+  _startBackgroundDownload();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════════════ */
+
+function _notify(payload) {
+  if (_mainWindowRef && !_mainWindowRef.isDestroyed()) {
+    _mainWindowRef.webContents.send(payload.type, payload);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   IPC — HANDLERS (enregistrés depuis main.js)
+══════════════════════════════════════════════════════════════════ */
 
 function registerIpc(getMainWindow) {
-  // Check manuel depuis Settings
+
+  /* ── Vérification manuelle depuis Settings ── */
   ipcMain.handle('update:check', async () => {
     if (!app.isPackaged) {
       return { upToDate: true, current: app.getVersion(), dev: true };
     }
 
     return new Promise((resolve) => {
-      let resolved = false;
+      let done = false;
+      const current = app.getVersion().replace(/^v/, '');
+
       const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          resolve({ upToDate: true, error: 'timeout', current: app.getVersion() });
-        }
-      }, 12000);
+        if (!done) { done = true; cleanup(); resolve({ upToDate: true, error: 'timeout', current: app.getVersion() }); }
+      }, 12_000);
 
       function onAvailable(info) {
-        if (resolved) return;
-        const cur = app.getVersion().replace(/^v/, '');
-        const avail = (info.version || '').replace(/^v/, '');
-        if (!_isNewer(cur, avail)) {
-          // Anti-boucle : déjà à jour
-          resolved = true;
-          clearTimeout(timeout);
-          cleanup();
+        if (done) return;
+        const candidate = (info.version || '').replace(/^v/, '');
+        done = true; clearTimeout(timeout); cleanup();
+        if (!_isNewer(current, candidate)) {
           resolve({ upToDate: true, current: app.getVersion() });
-          return;
+        } else {
+          resolve({ upToDate: false, latest: info.version, current: app.getVersion() });
         }
-        resolved = true;
-        clearTimeout(timeout);
-        cleanup();
-        resolve({ upToDate: false, latest: info.version, current: app.getVersion() });
       }
-
       function onNotAvailable() {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timeout);
-        cleanup();
-        resolve({ upToDate: true, current: app.getVersion() });
+        if (!done) { done = true; clearTimeout(timeout); cleanup(); resolve({ upToDate: true, current: app.getVersion() }); }
       }
-
       function onError(err) {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timeout);
-        cleanup();
-        resolve({ upToDate: true, error: err.message, current: app.getVersion() });
+        if (!done) { done = true; clearTimeout(timeout); cleanup(); resolve({ upToDate: true, error: err.message, current: app.getVersion() }); }
       }
 
       autoUpdater.on('update-available',     onAvailable);
@@ -465,26 +513,67 @@ function registerIpc(getMainWindow) {
     });
   });
 
-  // Démarrer le téléchargement depuis la notification toast
+  /* ── Démarrer le téléchargement ── */
   ipcMain.handle('update:download', () => {
     const win = getMainWindow?.();
-    if (win) startBackgroundDownload(win);
-    return true;
+    if (win) _mainWindowRef = win;
+    if (_dlState === 'paused') {
+      _resumeDownload();
+    } else {
+      _startBackgroundDownload();
+    }
+    return { started: true, state: _dlState };
   });
 
-  // Installer maintenant (redémarre l'app)
+  /* ── Mettre en pause ── */
+  ipcMain.handle('update:pause', () => {
+    _pauseDownload();
+    return { state: _dlState };
+  });
+
+  /* ── Reprendre ── */
+  ipcMain.handle('update:resume', () => {
+    _resumeDownload();
+    return { state: _dlState };
+  });
+
+  /* ── Annuler ── */
+  ipcMain.handle('update:cancel', () => {
+    _cancelDownload();
+    return { state: _dlState };
+  });
+
+  /* ── Installer maintenant ── */
   ipcMain.handle('update:install', () => {
+    if (_dlState !== 'ready') return { error: 'not_ready' };
     log.info('[Updater] Installation demandée par l\'utilisateur');
     autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.quitAndInstall(true, true);
-    return true;
+    autoUpdater.quitAndInstall(/* silent */ true, /* runAfter */ true);
+    return { ok: true };
   });
 
-  // Remettre à plus tard (ferme la notification)
+  /* ── Différer (fermer la notification) ── */
   ipcMain.handle('update:defer', () => {
-    log.info('[Updater] Mise à jour reportée par l\'utilisateur');
-    return true;
+    log.info('[Updater] MAJ reportée par l\'utilisateur');
+    // Garde l'état — la notification réapparaîtra au prochain check
+    return { deferred: true };
   });
+
+  /* ── État courant ── */
+  ipcMain.handle('update:state', () => ({
+    state:   _dlState,
+    version: _dlVersion,
+    current: app.getVersion(),
+  }));
 }
 
-module.exports = { runUpdater, registerIpc, startBackgroundChecks, stopBackgroundChecks };
+/* ══════════════════════════════════════════════════════════════════
+   EXPORTS
+══════════════════════════════════════════════════════════════════ */
+
+module.exports = {
+  runUpdater,
+  registerIpc,
+  startBackgroundChecks,
+  stopBackgroundChecks,
+};

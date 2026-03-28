@@ -3,13 +3,17 @@
 /**
  * updateLogger.js — Logger dédié aux mises à jour
  *
- * Utilise electron-log pour écrire dans :
- *   Windows : %APPDATA%\discowl-browser\logs\updater.log
- *   macOS   : ~/Library/Logs/discowl-browser/updater.log
- *   Linux   : ~/.config/discowl-browser/logs/updater.log
+ * Fichiers de log :
+ *   Windows : %APPDATA%\Discowl Browser\logs\updater.log
+ *   macOS   : ~/Library/Logs/Discowl Browser/updater.log
+ *   Linux   : ~/.config/Discowl Browser/logs/updater.log
  *
- * Rotation : max 5MB par fichier, 3 fichiers conservés
- * Format   : [timestamp] [level] message
+ * Rotation automatique : 5 MB max, 3 fichiers conservés.
+ * En dev   : logs console (debug) + fichier.
+ * En prod  : fichier uniquement (console silencieuse).
+ *
+ * L'interface exposée est compatible avec autoUpdater.logger :
+ *   { info, warn, error, debug, silly, verbose }
  */
 
 let log;
@@ -17,31 +21,33 @@ let log;
 try {
   log = require('electron-log');
 
-  // Fichier de log dédié aux mises à jour (séparé du log principal)
+  // Fichier dédié — séparé du log principal de l'app
   log.transports.file.fileName = 'updater.log';
   log.transports.file.maxSize  = 5 * 1024 * 1024; // 5 MB
   log.transports.file.format   = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
 
-  // En dev : logs console visibles
-  // En prod : logs fichier uniquement (pas de pollution console)
   const { app } = require('electron');
+
   if (app.isPackaged) {
-    log.transports.console.level = false; // désactiver console en prod
+    // Prod : désactiver la console (pas de pollution dans les outils système)
+    log.transports.console.level = false;
+    log.transports.file.level    = 'info';
   } else {
+    // Dev : tout voir
     log.transports.console.level = 'debug';
     log.transports.file.level    = 'debug';
   }
 
-} catch (e) {
-  // electron-log non disponible (rare) — fallback sur console
-  // Les méthodes sont compatibles avec l'interface autoUpdater.logger
+} catch (_) {
+  // Fallback si electron-log n'est pas installé
+  const prefix = '[Updater]';
   log = {
-    info:  (...a) => console.log('[Updater]',  ...a),
-    warn:  (...a) => console.warn('[Updater]', ...a),
-    error: (...a) => console.error('[Updater]',...a),
-    debug: (...a) => console.log('[Updater]',  ...a),
-    silly: (...a) => {},
-    verbose: (...a) => {},
+    info:    (...a) => console.log(prefix,   ...a),
+    warn:    (...a) => console.warn(prefix,  ...a),
+    error:   (...a) => console.error(prefix, ...a),
+    debug:   (...a) => console.log(prefix,   ...a),
+    silly:   () => {},
+    verbose: () => {},
   };
 }
 

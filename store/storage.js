@@ -85,20 +85,46 @@ class Storage {
        *   { id, title, url, type: "bookmark"|"folder", toolbar: bool, children: [] }
        */
       bookmarks: [
-        { id: 'bm-1', title: 'Google',      url: 'https://www.google.com',       type: 'bookmark', toolbar: true,  children: [] },
-        { id: 'bm-2', title: 'DuckDuckGo',  url: 'https://duckduckgo.com',        type: 'bookmark', toolbar: true,  children: [] },
-        { id: 'bm-3', title: 'GitHub',      url: 'https://github.com',            type: 'bookmark', toolbar: false, children: [] },
-        { id: 'bm-4', title: 'MDN Web Docs',url: 'https://developer.mozilla.org', type: 'bookmark', toolbar: false, children: [] },
         {
-          id: 'folder-1',
-          title: 'Développement',
-          type: 'folder',
-          toolbar: false,
-          children: [
-            { id: 'bm-5', title: 'Stack Overflow', url: 'https://stackoverflow.com', type: 'bookmark', toolbar: false, children: [] },
-            { id: 'bm-6', title: 'NPM',            url: 'https://npmjs.com',          type: 'bookmark', toolbar: false, children: [] },
-            { id: 'bm-7', title: 'Can I Use',      url: 'https://caniuse.com',        type: 'bookmark', toolbar: false, children: [] }
-          ]
+          id: 'bm-1', title: 'Google', url: 'https://www.google.com',
+          type: 'bookmark', toolbar: true, children: [],
+          tags: [], createdAt: Date.now(), visitedAt: 0, visitCount: 0, pinned: false
+        },
+        {
+          id: 'bm-2', title: 'DuckDuckGo', url: 'https://duckduckgo.com',
+          type: 'bookmark', toolbar: true, children: [],
+          tags: [], createdAt: Date.now(), visitedAt: 0, visitCount: 0, pinned: false
+        },
+        {
+          id: 'bm-3', title: 'GitHub', url: 'https://github.com',
+          type: 'bookmark', toolbar: false, children: [],
+          tags: ['dev'], createdAt: Date.now(), visitedAt: 0, visitCount: 0, pinned: false
+        },
+        {
+          id: 'bm-4', title: 'MDN Web Docs', url: 'https://developer.mozilla.org',
+          type: 'bookmark', toolbar: false, children: [],
+          tags: ['dev', 'reference'], createdAt: Date.now(), visitedAt: 0, visitCount: 0, pinned: false
+        },
+        {
+          id: 'folder-1', title: 'Développement', type: 'folder',
+          toolbar: false, children: [
+            {
+              id: 'bm-5', title: 'Stack Overflow', url: 'https://stackoverflow.com',
+              type: 'bookmark', toolbar: false, children: [],
+              tags: ['dev'], createdAt: Date.now(), visitedAt: 0, visitCount: 0, pinned: false
+            },
+            {
+              id: 'bm-6', title: 'NPM', url: 'https://npmjs.com',
+              type: 'bookmark', toolbar: false, children: [],
+              tags: ['dev', 'tools'], createdAt: Date.now(), visitedAt: 0, visitCount: 0, pinned: false
+            },
+            {
+              id: 'bm-7', title: 'Can I Use', url: 'https://caniuse.com',
+              type: 'bookmark', toolbar: false, children: [],
+              tags: ['dev', 'reference'], createdAt: Date.now(), visitedAt: 0, visitCount: 0, pinned: false
+            }
+          ],
+          tags: [], createdAt: Date.now(), visitedAt: 0, visitCount: 0, pinned: false
         }
       ]
     };

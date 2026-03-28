@@ -383,31 +383,85 @@
 
     <!-- Left Sidebar — Bookmarks -->
     <aside id="left-sidebar" class="sidebar sidebar-left closed" aria-label="Bookmarks" role="complementary">
+
+      <!-- ── Header ── -->
       <div class="sidebar-header">
         <span class="sidebar-title">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2h10v13l-5-3-5 3V2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
           <span data-i18n="sidebar.bookmarks">Bookmarks</span>
         </span>
+        <div class="sidebar-header-actions">
+          <!-- View toggles -->
+          <button class="bm-view-btn active" data-bm-view="list" title="List view" data-i18n-title="bm.view_list">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 3h11M1 6.5h11M1 10h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+          <button class="bm-view-btn" data-bm-view="compact" title="Compact view" data-i18n-title="bm.view_compact">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 2.5h11M1 5h11M1 7.5h11M1 10h11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </button>
+          <button class="bm-view-btn" data-bm-view="grid" title="Grid view" data-i18n-title="bm.view_grid">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="7" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="7" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="7" y="7" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+          </button>
+        </div>
         <button class="sidebar-close-btn" data-target="left-sidebar" title="Close">
           <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
+
+      <!-- ── Recherche ── -->
       <div class="sidebar-search-bar">
-        <input id="bookmarks-search" type="text" placeholder="Search…" autocomplete="off" data-i18n-placeholder="sidebar.search" />
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" class="sidebar-search-icon"><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.3"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <input id="bookmarks-search" type="text" placeholder="Search bookmarks…" autocomplete="off" data-i18n-placeholder="sidebar.search"/>
       </div>
+
+      <!-- ── Actions ── -->
       <div class="sidebar-actions">
-        <button id="add-bookmark-btn" class="sidebar-action-btn" title="Add bookmark">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <button id="add-bookmark-btn" class="sidebar-action-btn" title="Add bookmark" data-i18n-title="bm.add_btn">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           <span data-i18n="bm.add_btn">Add</span>
         </button>
-        <button id="add-folder-btn" class="sidebar-action-btn" title="New folder">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 3h5l1 1h6v8H1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <button id="add-folder-btn" class="sidebar-action-btn" title="New folder" data-i18n-title="bm.folder_btn">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 2.5h4l1 1h5v7H1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
           <span data-i18n="bm.folder_btn">Folder</span>
         </button>
       </div>
-      <div id="bookmarks-tree" role="tree" aria-label="Bookmarks tree">
+
+      <!-- ── Smart views ── -->
+      <div class="bm-smart-section">
+        <div class="bm-smart-title" data-i18n="bm.smart_views">Smart views</div>
+        <div class="bm-smart-views">
+          <button class="bm-smart-btn" data-bm-smart="all" data-i18n="bm.view_all">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 2h7v9l-3.5-2L3 11V2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            <span data-i18n="bm.view_all">All</span>
+          </button>
+          <button class="bm-smart-btn" data-bm-smart="recent">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 4v3l2 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-i18n="bm.view_recent">Recent</span>
+            <span class="bm-smart-count" id="bm-view-recent-count"></span>
+          </button>
+          <button class="bm-smart-btn" data-bm-smart="frequent">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 10l3-4 2.5 2.5L9 5l3 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-i18n="bm.view_frequent">Frequent</span>
+            <span class="bm-smart-count" id="bm-view-frequent-count"></span>
+          </button>
+          <button class="bm-smart-btn" data-bm-smart="unvisited">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.3" stroke-dasharray="3 2"/></svg>
+            <span data-i18n="bm.view_unvisited">Unvisited</span>
+            <span class="bm-smart-count" id="bm-view-unvisited-count"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Tags ── -->
+      <div class="bm-tags-section hidden" id="bm-tags-section">
+        <div class="bm-smart-title" data-i18n="bm.tags_section"># Tags</div>
+        <div class="bm-tags-list" id="bm-tags-list"></div>
+      </div>
+
+      <!-- ── Arborescence principale ── -->
+      <div id="bookmarks-tree" role="tree" aria-label="Bookmarks tree" class="bm-tree bm-view-list">
         <!-- populated by bookmarks.js -->
       </div>
+
     </aside>
 
     <!-- Webview Container — the actual browser content -->

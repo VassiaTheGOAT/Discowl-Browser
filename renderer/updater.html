@@ -12,8 +12,8 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       background: #0f1117;
       color: #e2e8f0;
-      width: 460px;
-      height: 280px;
+      width: 480px;
+      height: 300px;
       overflow: hidden;
       user-select: none;
       -webkit-app-region: drag;
@@ -21,63 +21,66 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0;
     }
 
-    /* ── Header ── */
+    /* ── Branding ─────────────────────────────────────────── */
     .header {
       display: flex;
       align-items: center;
-      gap: 16px;
-      margin-bottom: 32px;
+      gap: 18px;
+      margin-bottom: 36px;
     }
 
     .logo {
-      width: 68px; height: 68px;
+      width: 72px;
+      height: 72px;
       object-fit: contain;
-      filter: drop-shadow(0 4px 12px rgba(12,192,223,.25));
+      filter: drop-shadow(0 6px 16px rgba(12,192,223,.3));
+      flex-shrink: 0;
     }
 
-    .brand { display: flex; flex-direction: column; gap: 4px; }
+    .brand { display: flex; flex-direction: column; gap: 3px; }
 
     .brand-name {
-      font-size: 24px;
+      font-size: 26px;
       font-weight: 700;
+      letter-spacing: -0.5px;
       background: linear-gradient(135deg, #0cc0df 0%, #ffde59 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      letter-spacing: -0.4px;
       line-height: 1;
     }
 
     .brand-tagline {
-      font-size: 11px;
+      font-size: 11.5px;
       color: #475569;
-      letter-spacing: 0.4px;
+      letter-spacing: 0.3px;
+      margin-top: 2px;
     }
 
     .brand-version {
       font-size: 10px;
-      color: #334155;
-      letter-spacing: 0.5px;
-      margin-top: 1px;
+      color: #2d3748;
+      letter-spacing: 0.6px;
+      margin-top: 3px;
+      font-variant-numeric: tabular-nums;
     }
 
-    /* ── Download panel ── */
+    /* ── Panel de progression ────────────────────────────── */
     .dl-panel {
-      width: 360px;
+      width: 380px;
       display: flex;
       flex-direction: column;
-      gap: 7px;
+      gap: 8px;
     }
 
-    /* Status row */
+    /* Row statut + pourcentage */
     .status-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      height: 18px;
+      min-height: 18px;
     }
 
     .status-text {
@@ -87,109 +90,119 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      transition: color .2s;
+      transition: color .25s;
     }
-    .status-text.success { color: #34d399; }
-    .status-text.error   { color: #f87171; }
+    .status-text.ok    { color: #34d399; }
+    .status-text.error { color: #f87171; }
 
     .status-pct {
-      font-size: 12px;
+      font-size: 12.5px;
       font-weight: 600;
       color: #0cc0df;
-      min-width: 40px;
+      min-width: 44px;
       text-align: right;
-      opacity: 0;
-      transition: opacity .2s;
-    }
-    .status-pct.visible { opacity: 1; }
-
-    /* Progress bar */
-    .progress-track {
-      width: 100%;
-      height: 4px;
-      background: #1e293b;
-      border-radius: 2px;
-      overflow: hidden;
-      opacity: 0;
-      transition: opacity .3s;
-    }
-    .progress-track.visible { opacity: 1; }
-
-    .progress-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #0cc0df, #38bdf8, #ffde59);
-      background-size: 200% 100%;
-      border-radius: 2px;
-      transition: width .2s ease;
-    }
-
-    .progress-fill.indeterminate {
-      width: 28%;
-      animation: indeterminate 1.5s ease-in-out infinite;
-    }
-    @keyframes indeterminate {
-      0%   { transform: translateX(-180%); }
-      100% { transform: translateX(550%); }
-    }
-
-    /* Meta row: speed + size */
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      height: 14px;
-    }
-    .meta-speed, .meta-size {
-      font-size: 10px;
-      color: #334155;
       opacity: 0;
       transition: opacity .2s;
       font-variant-numeric: tabular-nums;
     }
-    .meta-speed.visible, .meta-size.visible { opacity: 1; }
+    .status-pct.show { opacity: 1; }
 
-    /* Installing spinner row */
-    .installing-row {
+    /* Barre de progression */
+    .progress-track {
+      width: 100%;
+      height: 5px;
+      background: #1a2035;
+      border-radius: 3px;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .progress-track.show { opacity: 1; }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0cc0df, #38bdf8 50%, #ffde59);
+      background-size: 200% 100%;
+      border-radius: 3px;
+      transition: width .25s ease;
+    }
+
+    .progress-fill.spin {
+      width: 30%;
+      animation: indeterminate 1.6s ease-in-out infinite;
+    }
+
+    @keyframes indeterminate {
+      0%   { transform: translateX(-200%); }
+      100% { transform: translateX(600%);  }
+    }
+
+    /* Métadonnées : vitesse + taille */
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      min-height: 15px;
+    }
+
+    .meta-speed, .meta-size {
+      font-size: 10.5px;
+      color: #2d3748;
+      opacity: 0;
+      transition: opacity .2s;
+      font-variant-numeric: tabular-nums;
+    }
+    .meta-speed.show, .meta-size.show { opacity: 1; }
+
+    /* Row installation */
+    .install-row {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      height: 14px;
+      min-height: 15px;
       opacity: 0;
       transition: opacity .3s;
     }
-    .installing-row.visible { opacity: 1; }
+    .install-row.show { opacity: 1; }
 
     .spinner {
-      width: 12px; height: 12px;
+      width: 12px;
+      height: 12px;
       border: 1.5px solid #1e293b;
       border-top-color: #0cc0df;
       border-radius: 50%;
-      animation: spin .65s linear infinite;
+      animation: spin .7s linear infinite;
       flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .installing-text {
-      font-size: 10px;
+    .install-text {
+      font-size: 10.5px;
       color: #475569;
     }
 
-    /* Error state */
-    .error-hint {
-      font-size: 10px;
-      color: #475569;
+    /* Hint lancement sans MAJ */
+    .launch-hint {
+      font-size: 10.5px;
+      color: #334155;
       text-align: center;
       opacity: 0;
       transition: opacity .3s;
     }
-    .error-hint.visible { opacity: 1; }
+    .launch-hint.show { opacity: 1; }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <img src="../assets/logo-discowl.png" class="logo" alt="" draggable="false" onerror="this.style.display='none'"/>
+    <img
+      src="../assets/logo-discowl.png"
+      class="logo"
+      alt=""
+      draggable="false"
+      onerror="this.style.display='none'"
+    />
     <div class="brand">
       <div class="brand-name">Discowl</div>
       <div class="brand-tagline">Private Browser</div>
@@ -200,11 +213,11 @@
   <div class="dl-panel">
     <div class="status-row">
       <div class="status-text" id="status">Starting…</div>
-      <div class="status-pct" id="pct"></div>
+      <div class="status-pct"  id="pct"></div>
     </div>
 
     <div class="progress-track" id="track">
-      <div class="progress-fill indeterminate" id="fill"></div>
+      <div class="progress-fill spin" id="fill"></div>
     </div>
 
     <div class="meta-row">
@@ -212,135 +225,152 @@
       <div class="meta-size"  id="size"></div>
     </div>
 
-    <div class="installing-row" id="installing">
+    <div class="install-row" id="install-row">
       <div class="spinner"></div>
-      <div class="installing-text">Applying update…</div>
+      <div class="install-text">Applying update…</div>
     </div>
 
-    <div class="error-hint" id="error-hint">
+    <div class="launch-hint" id="launch-hint">
       Launching without update…
     </div>
   </div>
 
   <script>
-    const $ = id => document.getElementById(id);
-
+    /* ── Références DOM ───────────────────────────────── */
     const els = {
-      ver:      $('ver'),
-      status:   $('status'),
-      pct:      $('pct'),
-      track:    $('track'),
-      fill:     $('fill'),
-      speed:    $('speed'),
-      size:     $('size'),
-      installing: $('installing'),
-      errorHint:  $('error-hint'),
+      ver:        document.getElementById('ver'),
+      status:     document.getElementById('status'),
+      pct:        document.getElementById('pct'),
+      track:      document.getElementById('track'),
+      fill:       document.getElementById('fill'),
+      speed:      document.getElementById('speed'),
+      size:       document.getElementById('size'),
+      installRow: document.getElementById('install-row'),
+      launchHint: document.getElementById('launch-hint'),
     };
 
-    // ── Helpers ──────────────────────────────────────────────
-    const fmt = (bytes) => {
-      if (!bytes || bytes <= 0) return '';
-      if (bytes < 1024)       return bytes + ' B';
-      if (bytes < 1048576)    return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / 1048576).toFixed(1) + ' MB';
-    };
-
-    function setState(status, opts = {}) {
-      // status text
-      els.status.className = 'status-text' + (opts.cls ? ' ' + opts.cls : '');
-      els.status.textContent = status;
-
-      // percent
-      if (opts.pct !== undefined) {
-        els.pct.textContent = opts.pct + '%';
-        els.pct.classList.add('visible');
-      } else {
-        els.pct.classList.remove('visible');
-      }
-
-      // progress bar
-      if (opts.indeterminate) {
-        els.track.classList.add('visible');
-        els.fill.classList.add('indeterminate');
-        els.fill.style.width = '';
-      } else if (opts.pct !== undefined) {
-        els.track.classList.add('visible');
-        els.fill.classList.remove('indeterminate');
-        els.fill.style.width = opts.pct + '%';
-      } else {
-        els.track.classList.remove('visible');
-        els.fill.classList.remove('indeterminate');
-      }
-
-      // meta
-      if (opts.speed) { els.speed.textContent = fmt(opts.speed) + '/s'; els.speed.classList.add('visible'); }
-      else els.speed.classList.remove('visible');
-
-      if (opts.size) { els.size.textContent = fmt(opts.transferred) + ' / ' + fmt(opts.size); els.size.classList.add('visible'); }
-      else els.size.classList.remove('visible');
-
-      // installing spinner
-      opts.installing ? els.installing.classList.add('visible') : els.installing.classList.remove('visible');
-
-      // error hint
-      opts.errorHint ? els.errorHint.classList.add('visible') : els.errorHint.classList.remove('visible');
+    /* ── Formatage octets ─────────────────────────────── */
+    function fmt(b) {
+      if (!b || b <= 0) return '';
+      if (b < 1024)     return b + ' B';
+      if (b < 1048576)  return (b / 1024).toFixed(1) + ' KB';
+      return (b / 1048576).toFixed(1) + ' MB';
     }
 
-    // ── Init ─────────────────────────────────────────────────
+    /* ── Mise à jour de l'état de l'UI ───────────────── */
+    function setState(text, opts = {}) {
+      // Texte de statut
+      els.status.className = 'status-text' + (opts.cls ? ' ' + opts.cls : '');
+      els.status.textContent = text;
+
+      // Pourcentage
+      if (opts.pct !== undefined) {
+        els.pct.textContent = opts.pct + '%';
+        els.pct.classList.add('show');
+      } else {
+        els.pct.classList.remove('show');
+      }
+
+      // Barre de progression
+      if (opts.spin) {
+        els.track.classList.add('show');
+        els.fill.classList.add('spin');
+        els.fill.style.width = '';
+      } else if (opts.pct !== undefined) {
+        els.track.classList.add('show');
+        els.fill.classList.remove('spin');
+        els.fill.style.width = opts.pct + '%';
+      } else {
+        els.track.classList.remove('show');
+        els.fill.classList.remove('spin');
+      }
+
+      // Vitesse
+      if (opts.speed) {
+        els.speed.textContent = fmt(opts.speed) + '/s';
+        els.speed.classList.add('show');
+      } else {
+        els.speed.classList.remove('show');
+      }
+
+      // Taille transférée / totale
+      if (opts.total) {
+        els.size.textContent = fmt(opts.xfer) + ' / ' + fmt(opts.total);
+        els.size.classList.add('show');
+      } else {
+        els.size.classList.remove('show');
+      }
+
+      // Spinner installation
+      els.installRow.classList.toggle('show', !!opts.installing);
+
+      // Hint lancement sans MAJ
+      els.launchHint.classList.toggle('show', !!opts.hint);
+    }
+
+    /* ── Chargement de la version ─────────────────────── */
     window.updaterAPI?.getVersion().then(v => {
       if (v) els.ver.textContent = 'v' + v;
     });
 
-    setState('Checking for updates…', { indeterminate: true });
+    // État initial
+    setState('Checking for updates…', { spin: true });
 
-    // ── Speed calc ───────────────────────────────────────────
-    let _lastBytes = 0, _lastTime = Date.now(), _smoothSpeed = 0;
+    /* ── Calcul de la vitesse (EMA) ───────────────────── */
+    let _lastBytes = 0;
+    let _lastTime  = Date.now();
+    let _speed     = 0; // EMA lissée
 
-    // ── Events ───────────────────────────────────────────────
+    /* ── Événements updater ───────────────────────────── */
     window.updaterAPI?.onStatus(e => {
       switch (e.type) {
 
         case 'checking':
-          setState('Checking for updates…', { indeterminate: true });
+          setState('Checking for updates…', { spin: true });
           break;
 
         case 'not-available':
-          setState('Already up to date', { cls: 'success' });
+          setState('Already up to date', { cls: 'ok' });
           break;
 
         case 'available':
           setState(`Update ${e.version} found — downloading…`, { pct: 0 });
-          _lastBytes = 0; _lastTime = Date.now();
+          _lastBytes = 0;
+          _lastTime  = Date.now();
+          _speed     = 0;
           break;
 
         case 'progress': {
           const now = Date.now();
           const dt  = (now - _lastTime) / 1000;
-          if (dt > 0.4) {
-            const rawSpeed = (e.transferred - _lastBytes) / dt;
-            _smoothSpeed = _smoothSpeed * 0.6 + rawSpeed * 0.4; // EMA smoothing
+          if (dt > 0.35) {
+            const raw = (e.transferred - _lastBytes) / dt;
+            _speed     = _speed * 0.6 + raw * 0.4; // EMA
             _lastBytes = e.transferred;
             _lastTime  = now;
           }
           setState(`Downloading Discowl ${e.version || ''}…`, {
-            pct:       e.percent,
-            speed:     Math.round(_smoothSpeed),
-            size:      e.total,
-            transferred: e.transferred,
+            pct:  e.percent,
+            speed: Math.round(_speed),
+            xfer:  e.transferred,
+            total: e.total,
           });
           break;
         }
 
         case 'downloaded':
-          setState(`Update ${e.version} ready`, { pct: 100, installing: true });
+          setState(`Update ${e.version} ready — installing…`, {
+            pct:       100,
+            installing: true,
+          });
           break;
 
         case 'timeout':
-          setState('No connection — launching…', { cls: 'error', errorHint: true });
+          setState('No connection — launching…', { cls: 'error', hint: true });
           break;
 
         case 'error':
-          setState('Update failed', { cls: 'error', errorHint: true });
+          setState('Update failed — launching…', { cls: 'error', hint: true });
           break;
       }
     });

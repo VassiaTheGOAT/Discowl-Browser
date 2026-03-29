@@ -22,8 +22,10 @@
   }
 
   document.addEventListener('mousedown', (e) => {
-    if (!menu.classList.contains('hidden') && !menu.contains(e.target)) hideCtx();
-  });
+  if (e.button === 0) { // clic gauche uniquement
+    hideCtx();
+    }
+  }, true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx(); });
 
   // ── Helpers de construction ────────────────────────────────

@@ -190,6 +190,7 @@ function _openCustomizeTab() {
 
   const id = ++tabCounter;
   const webview = document.createElement('webview');
+  
   webview.setAttribute('partition', 'persist:main');
   webview.setAttribute('allowpopups', '');
   webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no');
@@ -424,7 +425,8 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   webview.addEventListener('close', () => {
     closeTab(id);
   });
-  /* ── Vault: messages depuis le content script (preload-webview) ── */
+
+  /* ── Vault & menus : messages depuis le content script (preload-webview) ── */
   webview.addEventListener('ipc-message', (e) => {
     if (e.channel === 'vault:credentials-submitted') {
       const { username, password, url } = e.args[0] || {};
@@ -440,11 +442,21 @@ function createTab(url = 'about:newtab', isPrivate = false) {
         });
       }
     }
+
     if (e.channel === 'vault:field-focused') {
       const { url, rect } = e.args[0] || {};
       if (url && !isPrivate) {
         offerAutofill(url, webview, rect);
       }
+    }
+
+    // ── Fermeture des menus au clic dans la webview ──────────
+    // Les clics dans le contenu d'une webview ne remontent pas au
+    // document parent (processus séparé). preload-webview.js envoie
+    // ce message à chaque mousedown dans la page pour combler ce gap.
+    if (e.channel === 'page:mousedown') {
+      closeAllPanels();
+      window._hideContextMenu?.();
     }
   });
 

@@ -88,18 +88,40 @@ function _configure() {
 }
 
 function _purgePendingCache() {
+  // Purge intelligente : on supprime le cache UNIQUEMENT si la version
+  // en attente est <= à la version courante (scénario boucle infinie).
+  // Si la version en attente est > courante, c'est un téléchargement
+  // valide (ex : réinstallation) — on le conserve pour éviter un re-DL.
+  const current = app.getVersion().replace(/^v/, '');
   const dirs = [
     path.join(app.getPath('userData'), '..', 'discowl-browser-updater', 'pending'),
     path.join(app.getPath('userData'), 'pending'),
   ];
   for (const dir of dirs) {
     try {
-      if (fs.existsSync(dir)) {
+      if (!fs.existsSync(dir)) continue;
+
+      // Lire le latest.yml dans pending/ pour connaître la version cachée
+      const ymlPath = path.join(dir, 'latest.yml');
+      let cachedVersion = null;
+      if (fs.existsSync(ymlPath)) {
+        const yml = fs.readFileSync(ymlPath, 'utf8');
+        const m   = yml.match(/^version:\s*([\d.]+)/m);
+        if (m) cachedVersion = m[1].replace(/^v/, '');
+      }
+
+      if (cachedVersion && _isNewer(current, cachedVersion)) {
+        // Version en attente supérieure → conserver (sera utilisé directement)
+        log.info('[Updater] Cache pending conservé — version', cachedVersion, '> courante', current);
+      } else {
+        // Même version ou version inconnue → purger (anti-boucle)
         fs.rmSync(dir, { recursive: true, force: true });
-        log.info('[Updater] Cache pending purgé:', dir);
+        log.info('[Updater] Cache pending purgé (version', cachedVersion || '?', '<= courante', current, ')');
       }
     } catch (e) {
-      log.warn('[Updater] Impossible de purger cache:', e.message);
+      // En cas d'erreur, purger par précaution
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+      log.warn('[Updater] Cache pending — purge forcée:', e.message);
     }
   }
 }
@@ -110,8 +132,8 @@ function _purgePendingCache() {
 
 function _createSplash() {
   _splashWin = new BrowserWindow({
-    width:           480,
-    height:          300,
+    width:           520,
+    height:          340,
     resizable:       false,
     frame:           false,
     transparent:     false,

@@ -116,6 +116,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupSandwichMenu();
     setupKeyboardShortcuts();
     setupNewTabPage();
+
+  // Fermer le context menu sur tout clic dans la zone de contenu,
+  // y compris quand la webview n'est pas encore active
+  document.getElementById('webview-container')?.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.ctx-menu')) window._hideContextMenu?.();
+  });
+  document.getElementById('new-tab-page')?.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.ctx-menu, #star-popup, .ntp-bg-dock, .ntp-bg-btn')) {
+      window._hideContextMenu?.();
+    }
+  });
     applySettings(settings);
     updateTorIndicator();
     window.DownloadManager?.init();
@@ -325,7 +336,19 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   tabs.push(tab);
 
   /* ─── Webview event listeners ────────────────────────────── */
+  // ── Fermer le context menu dès qu'on interagit avec la webview ──
+  // Les évts mousedown/click ne se propagent pas depuis la webview
+  // (process séparé). On écoute focus et did-start-navigate à la place.
+  webview.addEventListener('focus', () => {
+    window._hideContextMenu?.();
+  });
+  // Clic dans la zone webview capturé par le conteneur parent
+  webview.addEventListener('mousedown', () => {
+    window._hideContextMenu?.();
+  });
+
   webview.addEventListener('did-start-loading', () => {
+    window._hideContextMenu?.();
     tab.isLoading = true;
     refreshTab(id);
     if (activeTabId === id) { updateNavButtons(); updateReloadBtn(true); }
@@ -1020,11 +1043,14 @@ function updateSecurityIcon(url) {
 }
 
 function updateBookmarkStar(url) {
-  // Délègue à BookmarksManager qui gère aussi l'état SVG (filled/outline)
+  // Pour la homepage, vérifier l'URL configurée dans les settings
+  let checkUrl = url;
+  if (!checkUrl || checkUrl === 'about:newtab' || checkUrl.startsWith('about:')) {
+    checkUrl = settings?.homePage;
+  }
   if (window.BookmarksManager) {
-    window.BookmarksManager.updateStarBtn(url);
+    window.BookmarksManager.updateStarBtn(checkUrl || '');
   } else {
-    // Fallback minimal si BookmarksManager pas encore chargé
     const btn = document.getElementById('bookmark-star-btn');
     if (btn) btn.title = 'Add to bookmarks';
   }
@@ -1104,12 +1130,22 @@ function setupToolbar() {
   document.getElementById('bookmark-star-btn').addEventListener('click', () => {
     const tab = getActiveTab();
     if (!tab) return;
-    // Fallback : lire l'URL depuis la barre si tab.url est vide
-    const url = tab.url || document.getElementById('url-bar')?.value?.trim();
-    if (!url || url === 'about:newtab' || url.startsWith('about:')) return;
-    const title = tab.title && tab.title !== i18n.t('tab.home') && tab.title !== i18n.t('tab.private_home') && tab.title !== i18n.t('tab.tor_home')
-      ? tab.title
-      : url;
+
+    let url   = tab.url || document.getElementById('url-bar')?.value?.trim();
+    let title = tab.title;
+
+    // Homepage (about:newtab / url vide) → proposer l'URL de la page d'accueil configurée
+    if (!url || url === 'about:newtab' || url.startsWith('about:')) {
+      const homeUrl = settings?.homePage;
+      if (!homeUrl || homeUrl === 'about:newtab' || homeUrl.startsWith('about:')) return;
+      url   = homeUrl;
+      title = i18n.t('tab.home') || 'Home';
+    }
+
+    // Nettoyer le titre (ne pas sauvegarder les noms internes)
+    const internalTitles = [i18n.t('tab.home'), i18n.t('tab.private_home'), i18n.t('tab.tor_home')];
+    if (!title || internalTitles.includes(title)) title = url;
+
     window.BookmarksManager?.openStarPopup(title, url);
   });
 
@@ -1728,224 +1764,6 @@ function showToolbarContextMenu(x, y) {
 /* ══════════════════════════════════════════════════════════════
    TOR UI — indicateur d'état + bouton New Circuit
 ══════════════════════════════════════════════════════════════ */
-/* ════════════════════════════════════════════════════════════════
-   UPDATE NOTIFICATIONS — renderer.js integration
-   À appeler dans DOMContentLoaded après initCustomTitlebar().
-════════════════════════════════════════════════════════════════ */
-
-function initUpdateNotifications() {
-  // Écouter : mise à jour disponible → afficher toast
-  window.discowlAPI.updates.onAvailable(({ version, releaseNotes }) => {
-    _showUpdateToast({ phase: 'available', version });
-  });
-
-  // Progression du téléchargement
-  window.discowlAPI.updates.onDownloadProgress(({ percent, bytesPerSecond, transferred, total, version }) => {
-    _updateProgress({ percent, bytesPerSecond, transferred, total, version });
-  });
-
-  // Pause
-  window.discowlAPI.updates.onDownloadPaused(({ version }) => {
-    _setToastPhase('paused', version);
-  });
-
-  // Téléchargement terminé → bouton "Restart"
-  window.discowlAPI.updates.onReady(({ version }) => {
-    _setToastPhase('ready', version);
-  });
-
-  // Erreur téléchargement
-  window.discowlAPI.updates.onError(({ message }) => {
-    _setToastPhase('error', null);
-    console.error('[Update] Download error:', message);
-  });
-}
-
-/* ── Toast d'update ─────────────────────────────────────────── */
-
-let _toastEl   = null;
-let _smoothSpd = 0;
-let _lastBytes = 0;
-let _lastTime  = Date.now();
-
-function _showUpdateToast({ phase, version }) {
-  _removeToast();
-
-  const toast = document.createElement('div');
-  toast.id = 'update-toast';
-  toast.className = 'update-toast';
-  toast.dataset.phase = phase || 'available';
-
-  toast.innerHTML = `
-    <div class="ut-header">
-      <div class="ut-icon">⬆</div>
-      <div class="ut-info">
-        <div class="ut-title" id="ut-title">Update ${version} available</div>
-        <div class="ut-sub"  id="ut-sub">Download in background — your session is preserved</div>
-      </div>
-      <button class="ut-dismiss" id="ut-dismiss" title="Dismiss">
-        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      </button>
-    </div>
-
-    <div class="ut-progress-wrap hidden" id="ut-progress-wrap">
-      <div class="ut-bar-track">
-        <div class="ut-bar-fill" id="ut-bar-fill"></div>
-      </div>
-      <div class="ut-meta-row">
-        <span class="ut-pct"   id="ut-pct"></span>
-        <span class="ut-speed" id="ut-speed"></span>
-        <span class="ut-size"  id="ut-size"></span>
-      </div>
-    </div>
-
-    <div class="ut-actions" id="ut-actions">
-      <button class="ut-btn ut-btn-primary"   id="ut-download">Download</button>
-      <button class="ut-btn ut-btn-secondary" id="ut-defer">Later</button>
-    </div>
-  `;
-
-  document.body.appendChild(toast);
-  requestAnimationFrame(() => toast.classList.add('show'));
-
-  // Dismiss
-  toast.querySelector('#ut-dismiss').addEventListener('click', () => {
-    _removeToast();
-    window.discowlAPI.updates.defer();
-  });
-
-  // Bouton Download
-  const dlBtn = toast.querySelector('#ut-download');
-  dlBtn.addEventListener('click', () => {
-    _setToastPhase('downloading', version);
-    window.discowlAPI.updates.download();
-  });
-
-  // Bouton Later
-  toast.querySelector('#ut-defer').addEventListener('click', () => {
-    _removeToast();
-    window.discowlAPI.updates.defer();
-  });
-}
-
-function _setToastPhase(phase, version) {
-  if (!_toastEl) return;
-  _toastEl.dataset.phase = phase;
-
-  const title   = _toastEl.querySelector('#ut-title');
-  const sub     = _toastEl.querySelector('#ut-sub');
-  const actions = _toastEl.querySelector('#ut-actions');
-  const progWrap= _toastEl.querySelector('#ut-progress-wrap');
-  const fill    = _toastEl.querySelector('#ut-bar-fill');
-
-  switch (phase) {
-    case 'downloading':
-      if (title) title.textContent = `Downloading Discowl ${version || ''}…`;
-      if (sub)   sub.textContent   = 'Download in background — safe to keep browsing';
-      if (progWrap) progWrap.classList.remove('hidden');
-      if (actions) actions.innerHTML = `
-        <button class="ut-btn ut-btn-pause" id="ut-pause">⏸ Pause</button>
-        <button class="ut-btn ut-btn-cancel" id="ut-cancel-dl">✕ Cancel</button>
-      `;
-      _toastEl.querySelector('#ut-pause')?.addEventListener('click', () => {
-        window.discowlAPI.updates.pause();
-      });
-      _toastEl.querySelector('#ut-cancel-dl')?.addEventListener('click', () => {
-        window.discowlAPI.updates.cancel();
-        _removeToast();
-      });
-      break;
-
-    case 'paused':
-      if (title) title.textContent = `Download paused`;
-      if (sub)   sub.textContent   = 'Click Resume to continue';
-      if (actions) actions.innerHTML = `
-        <button class="ut-btn ut-btn-primary" id="ut-resume">▶ Resume</button>
-        <button class="ut-btn ut-btn-cancel"  id="ut-cancel-dl2">✕ Cancel</button>
-      `;
-      _toastEl.querySelector('#ut-resume')?.addEventListener('click', () => {
-        _setToastPhase('downloading', version);
-        window.discowlAPI.updates.resume();
-      });
-      _toastEl.querySelector('#ut-cancel-dl2')?.addEventListener('click', () => {
-        window.discowlAPI.updates.cancel();
-        _removeToast();
-      });
-      break;
-
-    case 'ready':
-      if (title) title.textContent = `Update ${version || ''} ready to install`;
-      if (sub)   sub.textContent   = 'Restart Discowl to apply the update';
-      if (fill)  fill.style.width  = '100%';
-      if (actions) actions.innerHTML = `
-        <button class="ut-btn ut-btn-primary"   id="ut-install">Restart & Install</button>
-        <button class="ut-btn ut-btn-secondary" id="ut-defer-ready">Later</button>
-      `;
-      _toastEl.querySelector('#ut-install')?.addEventListener('click', () => {
-        window.discowlAPI.updates.install();
-      });
-      _toastEl.querySelector('#ut-defer-ready')?.addEventListener('click', _removeToast);
-      break;
-
-    case 'error':
-      if (title) title.textContent = 'Update failed';
-      if (sub)   sub.textContent   = 'Check your connection and try again later';
-      if (progWrap) progWrap.classList.add('hidden');
-      if (actions) actions.innerHTML = `
-        <button class="ut-btn ut-btn-secondary" id="ut-dismiss-err">Dismiss</button>
-      `;
-      _toastEl.querySelector('#ut-dismiss-err')?.addEventListener('click', _removeToast);
-      break;
-  }
-}
-
-function _updateProgress({ percent, bytesPerSecond, transferred, total, version }) {
-  if (!_toastEl) return;
-  const pct   = Math.round(percent);
-  const now   = Date.now();
-  const dt    = (now - _lastTime) / 1000;
-
-  // EMA lissage vitesse
-  if (dt > 0.3) {
-    const raw = (transferred - _lastBytes) / dt;
-    _smoothSpd = _smoothSpd * 0.6 + raw * 0.4;
-    _lastBytes = transferred;
-    _lastTime  = now;
-  }
-
-  const fill  = _toastEl.querySelector('#ut-bar-fill');
-  const pctEl = _toastEl.querySelector('#ut-pct');
-  const spdEl = _toastEl.querySelector('#ut-speed');
-  const szEl  = _toastEl.querySelector('#ut-size');
-
-  if (fill)  fill.style.width = pct + '%';
-  if (pctEl) pctEl.textContent = pct + '%';
-
-  const fmt = b => {
-    if (!b) return '';
-    if (b < 1048576) return (b/1024).toFixed(0) + ' KB';
-    return (b/1048576).toFixed(1) + ' MB';
-  };
-
-  if (spdEl) spdEl.textContent = fmt(_smoothSpd) + '/s';
-  if (szEl)  szEl.textContent  = fmt(transferred) + ' / ' + fmt(total);
-}
-
-function _removeToast() {
-  if (_toastEl) {
-    _toastEl.classList.remove('show');
-    setTimeout(() => { _toastEl?.remove(); _toastEl = null; }, 250);
-  }
-}
-
-// Proxy pour accès depuis _showUpdateToast
-Object.defineProperty(window, '_getToastEl', { get: () => document.getElementById('update-toast') });
-Object.defineProperty(window, '_toastElProxy', {
-  get: () => document.getElementById('update-toast'),
-  set: () => {}
-});
-// Fix: on definit _toastEl via closure (le code ci-dessus y accède directement)
-
 function initTorUI() {
   if (!settings.torEnabled) return;
 
@@ -2161,18 +1979,29 @@ function initMenubar() {
       createTab(url);
     }
   });
-  mb('print',            () => getActiveTab()?.webview?.print?.());
+  mb('print', () => {
+    const t = getActiveTab();
+    if (!t?.webview || !t.url || t.url.startsWith('about:')) return;
+    try { t.webview.print(); } catch(e) { console.warn('[Print]', e.message); }
+  });
   mb('quit',             () => window.close());
 
   // Edit
-  mb('find',             () => {
-    const tab = getActiveTab();
-    if (tab?.webview) tab.webview.executeJavaScript("window.find?.('') || document.execCommand?.('find')");
+  mb('find', () => {
+    const t = getActiveTab();
+    if (!t?.webview || !t.url || t.url.startsWith('about:')) return;
+    // Ouvrir la barre de recherche dans la page via findInPage
+    try {
+      t.webview.findInPage('');
+    } catch(e) {
+      // Fallback : Ctrl+F natif
+      try { t.webview.executeJavaScript("document.execCommand('find')"); } catch {}
+    }
   });
-  mb('cut',              () => document.execCommand('cut'));
-  mb('copy',             () => document.execCommand('copy'));
-  mb('paste',            () => document.execCommand('paste'));
-  mb('select-all',       () => document.execCommand('selectAll'));
+  mb('cut',       () => { const t = getActiveTab(); if (t?.webview && t.url) t.webview.cut?.();       else document.execCommand('cut'); });
+  mb('copy',      () => { const t = getActiveTab(); if (t?.webview && t.url) t.webview.copy?.();      else document.execCommand('copy'); });
+  mb('paste',     () => { const t = getActiveTab(); if (t?.webview && t.url) t.webview.paste?.();     else document.execCommand('paste'); });
+  mb('select-all',() => { const t = getActiveTab(); if (t?.webview && t.url) t.webview.selectAll?.(); else document.execCommand('selectAll'); });
   mb('settings',         () => window.SettingsManager?.open());
 
   // View
@@ -2188,14 +2017,25 @@ function initMenubar() {
     const bar = document.getElementById('bookmarks-toolbar');
     if (bar) bar.classList.toggle('hidden');
   });
-  mb('devtools',         () => getActiveTab()?.webview?.openDevTools());
+  mb('devtools', () => {
+    const t = getActiveTab();
+    if (!t?.webview) return;
+    if (t.url && !t.url.startsWith('about:')) {
+      try { t.webview.openDevTools(); } catch(e) { console.warn('[DevTools]', e.message); }
+    } else {
+      // Sur la homepage, inspecter via l'ID de la webContents principale
+      try {
+        const wc = t.webview?.getWebContentsId?.();
+        if (wc) window.discowlAPI.devtools.open(wc);
+      } catch(e) { console.warn('[DevTools homepage]', e.message); }
+    }
+  });
 
   // Exposed for context-menu.js
   window._openDevTools = () => {
     const tab = getActiveTab();
-    if (tab?.webview && tab.url && !tab.url.startsWith('about:')) {
-      tab.webview.openDevTools();
-    }
+    if (!tab?.webview) return;
+    try { tab.webview.openDevTools(); } catch(e) { console.warn('[DevTools ctx]', e.message); }
   };
 
   // History
@@ -2320,7 +2160,30 @@ function setupKeyboardShortcuts() {
     if (ctrl && e.key === 'h') { e.preventDefault(); window.SidebarManager?.toggleRight(); }
     if (ctrl && e.key === 'r' || e.key === 'F5') { e.preventDefault(); getActiveTab()?.webview.reload(); }
     if (ctrl && e.key === 'p') { e.preventDefault(); getActiveTab()?.webview?.print?.(); }
-    if (ctrl && e.key === 's') { e.preventDefault(); const t = getActiveTab(); if (t?.url) t.webview?.downloadURL?.(t.url); }
+    if (ctrl && e.key === 's') {
+      e.preventDefault();
+      const t = getActiveTab();
+      if (!t?.webview || !t.url || t.url.startsWith('about:')) return;
+      // HTML pages: save rendered source
+      const ext = t.url.split('?')[0].split('.').pop().toLowerCase();
+      const isHtml = !ext || ['html','htm','xhtml','php','asp','aspx','do','jsp',''].includes(ext) || t.url.startsWith('http');
+      if (isHtml) {
+        (async () => {
+          try {
+            const html = await t.webview.executeJavaScript('document.documentElement.outerHTML');
+            const safeName = (t.title || 'page').replace(/[<>:"/\\|?*]/g, '_').slice(0,60) + '.html';
+            const dest = await window.discowlAPI.dialog.saveFile({ filename: safeName });
+            if (dest) {
+              const r = await window.discowlAPI.file.write(dest, html);
+              if (r?.ok) showToast(i18n.t('toast.page_saved'), 'success');
+              else showToast(i18n.t('toast.page_save_error'), 'error');
+            }
+          } catch { showToast(i18n.t('toast.page_save_error'), 'error'); }
+        })();
+      } else {
+        t.webview.downloadURL(t.url);
+      }
+    }
     if (ctrl && e.key === '=' || ctrl && e.key === '+') { e.preventDefault(); zoomActive(0.1); }
     if (ctrl && e.key === '-')  { e.preventDefault(); zoomActive(-0.1); }
     if (ctrl && e.key === '0')  { e.preventDefault(); zoomActive(0, true); }
@@ -2329,6 +2192,14 @@ function setupKeyboardShortcuts() {
     if (ctrl && e.key >= '1' && e.key <= '9') {
       const idx = parseInt(e.key) - 1;
       if (tabs[idx]) { e.preventDefault(); switchTab(tabs[idx].id); }
+    }
+
+    if (e.key === 'F12') {
+      e.preventDefault();
+      const t = getActiveTab();
+      if (t?.webview && t.url && !t.url.startsWith('about:')) {
+        try { t.webview.openDevTools(); } catch {}
+      }
     }
 
     // Alt+Left/Right for back/forward

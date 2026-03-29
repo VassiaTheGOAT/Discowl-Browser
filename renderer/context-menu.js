@@ -119,9 +119,9 @@
       menu.appendChild(shortcutItem(i18n.t('ctx.undo'), '', 'Ctrl+Z', () => wv.undo?.(), !p.editFlags?.canUndo));
       menu.appendChild(shortcutItem(i18n.t('ctx.redo'), '', 'Ctrl+Y', () => wv.redo?.(), !p.editFlags?.canRedo));
       menu.appendChild(sep());
-      menu.appendChild(shortcutItem(i18n.t('ctx.cut'),   ICONS.cut,  'Ctrl+X', () => wv.cut?.(),  !p.editFlags?.canCut));
-      menu.appendChild(shortcutItem(i18n.t('ctx.copy'),  ICONS.copy, 'Ctrl+C', () => wv.copy?.(), !p.editFlags?.canCopy || !sel));
-      menu.appendChild(shortcutItem(i18n.t('ctx.paste'), ICONS.paste,'Ctrl+V', () => wv.paste?.(),!p.editFlags?.canPaste));
+      menu.appendChild(shortcutItem(i18n.t('ctx.cut'),   ICONS.cut,  'Ctrl+X', () => { try { wv.cut?.(); } catch { document.execCommand('cut'); } },   !p.editFlags?.canCut));
+      menu.appendChild(shortcutItem(i18n.t('ctx.copy'),  ICONS.copy, 'Ctrl+C', () => { try { wv.copy?.(); } catch { document.execCommand('copy'); } },  !p.editFlags?.canCopy || !sel));
+      menu.appendChild(shortcutItem(i18n.t('ctx.paste'), ICONS.paste,'Ctrl+V', () => { try { wv.paste?.(); } catch { document.execCommand('paste'); } }, !p.editFlags?.canPaste));
       menu.appendChild(sep());
       menu.appendChild(shortcutItem(i18n.t('ctx.select_all'), ICONS.selectAll, 'Ctrl+A', () => wv.selectAll?.()));
       menu.appendChild(sep());
@@ -177,14 +177,23 @@
         menu.appendChild(item(i18n.t('ctx.bookmark_page'), ICONS.bookmark, () => {
           document.getElementById('bookmark-star-btn')?.click();
         }, !pageUrl || pageUrl.startsWith('about:')));
-        menu.appendChild(shortcutItem(i18n.t('ctx.save_page'), ICONS.save, 'Ctrl+S', () => {
+        menu.appendChild(shortcutItem(i18n.t('ctx.save_page'), ICONS.save, 'Ctrl+S', async () => {
           const t = window.getActiveTab?.();
-          if (t?.webview && t.url) t.webview.executeJavaScript('document.execCommand("saveAs")').catch(() => {});
+          if (!t?.webview || !t.url || t.url.startsWith('about:')) return;
+          try {
+            const html = await t.webview.executeJavaScript('document.documentElement.outerHTML');
+            const safeName = (t.title || 'page').replace(/[<>:"/\\|?*]/g,'_').slice(0,60)+'.html';
+            const dest = await window.discowlAPI.dialog.saveFile({ filename: safeName });
+            if (dest) {
+              const r = await window.discowlAPI.file.write(dest, html);
+              if (r?.ok) window.showToast?.(i18n.t('toast.page_saved'), 'success');
+            }
+          } catch(e) { window.showToast?.(i18n.t('toast.page_save_error'), 'error'); }
         }, !pageUrl || pageUrl.startsWith('about:')));
         menu.appendChild(shortcutItem(i18n.t('ctx.print'), ICONS.print, 'Ctrl+P', () => {
           const t = window.getActiveTab?.();
-          if (t?.webview && t.url) t.webview.print?.();
-          else window.print?.();
+          if (!t?.webview || !t.url || t.url.startsWith('about:')) return;
+          try { t.webview.print(); } catch(e) { console.warn('[Print ctx]', e.message); }
         }));
         menu.appendChild(sep());
       }
@@ -198,13 +207,12 @@
     }
     const _hasPage = pageUrl && !pageUrl.startsWith('about:');
     menu.appendChild(item(i18n.t('ctx.inspect'), ICONS.inspect, () => {
-      const t = window.getActiveTab?.();
-      if (!t) return;
-      // Try webview directly
-      const wv = t.webview;
-      if (wv) {
-        console.log('[Inspect] calling openDevTools on webview', wv);
-        wv.openDevTools();
+      // Déléguer à renderer.js qui gère le cas webview vs homepage
+      if (window._openDevTools) {
+        window._openDevTools();
+      } else {
+        const t = window.getActiveTab?.();
+        try { t?.webview?.openDevTools?.(); } catch(e) { console.warn('[Inspect]', e); }
       }
     }));
   }
@@ -223,6 +231,8 @@
   // ── Point d'entrée ─────────────────────────────────────────
   window._showContextMenu = function(wv, params, screenX, screenY) {
     hideCtx();
+    // Fermer aussi le menu contextuel de la toolbar s'il est ouvert
+    document.getElementById('toolbar-ctx-menu')?.remove();
     _activeWebview = wv;
     _params        = params;
     buildMenu(wv, params);

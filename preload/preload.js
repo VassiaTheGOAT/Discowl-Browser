@@ -113,7 +113,14 @@ contextBridge.exposeInMainWorld('discowlAPI', {
 
   /* ── Dialog ──────────────────────────────────────────────── */
   dialog: {
-    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
+    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+    openFile:      ()         => ipcRenderer.invoke('dialog:openFile'),
+    saveFile:      (opts)     => ipcRenderer.invoke('dialog:saveFile', opts),
+  },
+
+  /* ── File I/O (écriture sécurisée — validation côté main) ── */
+  file: {
+    write: (filePath, content) => ipcRenderer.invoke('file:write', filePath, content),
   },
 
   /* ── Updates ─────────────────────────────────────────────── */

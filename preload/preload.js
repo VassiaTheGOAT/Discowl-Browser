@@ -111,6 +111,16 @@ contextBridge.exposeInMainWorld('discowlAPI', {
   },
 
 
+  /* ── AdBlock ─────────────────────────────────────────────── */
+  adblock: {
+    stats:       ()      => ipcRenderer.invoke('adblock:stats'),
+    toggle:      (on)    => ipcRenderer.invoke('adblock:toggle', on),
+    getRules:    ()      => ipcRenderer.invoke('adblock:getRules'),
+    saveRules:   (text)  => ipcRenderer.invoke('adblock:saveRules', text),
+    forceUpdate: ()      => ipcRenderer.invoke('adblock:forceUpdate'),
+    resetStats:  ()      => ipcRenderer.invoke('adblock:resetStats'),
+  },
+
   /* ── Dialog ──────────────────────────────────────────────── */
   dialog: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

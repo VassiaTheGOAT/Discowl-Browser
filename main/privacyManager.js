@@ -1,345 +1,193 @@
 'use strict';
 
 /**
- * privacyManager.js — Gestionnaire vie privée + Tor (production)
+ * privacyManager.js — Version finale
  *
- * FAIL CLOSED : en mode Tor, si le proxy SOCKS n'est pas disponible,
- *               toutes les requêtes réseau sont bloquées.
+ * Principe absolu : un site web normal ne doit JAMAIS etre bloque.
+ * Seuls 3 cas annulent une requete :
+ *   1. Mode Tor + proxy injoignable (fail-closed)
+ *   2. blockTrackers=true + domaine EXACTEMENT dans TRACKER_DOMAINS
+ *   3. blockAds=true + domaine EXACTEMENT dans AD_DOMAINS
  *
- * Anti DNS-leak : forcer le resolver DNS via le proxy SOCKS5 de Tor
- *                 (Chromium le fait nativement avec proxy-server SOCKS5)
- *
- * Anti fingerprinting : UA uniforme, headers minimaux, no referer en Tor.
- *
- * Isolation de session : chaque onglet Tor utilise une partition
- *                        éphémère séparée (pas de shared state).
- *
- * WebRTC : désactivé en mode Tor via commandLine (avant app.ready)
- *          + setWebRTCIPHandlingPolicy en session.
- *
- * Nettoyage : à la fermeture, toutes les données de session sont effacées.
+ * Pas de wildcards. Pas de regex. Pas de moteur externe.
  */
 
 const { session, app } = require('electron');
 const net = require('net');
 
-/* ── User-Agent uniforme (Tor Browser level) ─────────────────
-   Utiliser un UA générique et répandu pour se fondre dans la masse.
-   Ne jamais exposer la version Electron (fingerprint trivial).
-─────────────────────────────────────────────────────────────── */
-const TOR_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0';
-
-const NORMAL_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
-/* ── Trackers bloqués ────────────────────────────────────────
-   Liste condensée — en mode Tor, tout passe par Tor de toute façon,
-   mais on bloque les ressources de tracking connues par prudence.
-─────────────────────────────────────────────────────────────── */
-const TRACKER_PATTERNS = [
-  '*://*.google-analytics.com/*','*://*.googletagmanager.com/*',
-  '*://*.doubleclick.net/*','*://*.googlesyndication.com/*',
-  '*://*.googleadservices.com/*','*://*.facebook.net/*',
-  '*://*.facebook.com/tr*','*://*.ads-twitter.com/*',
-  '*://analytics.twitter.com/*','*://*.clarity.ms/*',
-  '*://*.hotjar.com/*','*://*.mouseflow.com/*','*://*.fullstory.com/*',
-  '*://*.adnxs.com/*','*://*.rubiconproject.com/*','*://*.openx.net/*',
-  '*://*.pubmatic.com/*','*://*.casalemedia.com/*','*://*.criteo.com/*',
-  '*://*.criteo.net/*','*://*.outbrain.com/*','*://*.taboola.com/*',
-  '*://*.scorecardresearch.com/*','*://*.quantserve.com/*',
-  '*://*.moatads.com/*','*://*.mixpanel.com/*','*://*.segment.com/*',
-  '*://*.segment.io/*','*://*.amplitude.com/*',
-];
-
-/* ── Protocoles dangereux à bloquer ─────────────────────────── */
-const BLOCKED_PROTOCOLS = new Set([
-  'javascript:', 'data:', 'vbscript:', 'blob:',
+const TRACKER_DOMAINS = new Set([
+  'google-analytics.com','ssl.google-analytics.com','www.google-analytics.com',
+  'googletagmanager.com','www.googletagmanager.com','googletagservices.com',
+  'connect.facebook.net',
+  'ads-twitter.com','analytics.twitter.com',
+  'clarity.ms','www.clarity.ms','c.clarity.ms',
+  'hotjar.com','script.hotjar.com','static.hotjar.com',
+  'mouseflow.com','cdn.mouseflow.com',
+  'fullstory.com','edge.fullstory.com',
+  'mixpanel.com','api.mixpanel.com','cdn.mxpnl.com',
+  'amplitude.com','api.amplitude.com','api2.amplitude.com',
+  'segment.com','cdn.segment.com','api.segment.com',
+  'segment.io','api.segment.io',
+  'scorecardresearch.com','sb.scorecardresearch.com',
+  'quantserve.com','pixel.quantserve.com',
+  'moatads.com',
 ]);
 
-/* ── État global ─────────────────────────────────────────────── */
+const AD_DOMAINS = new Set([
+  'doubleclick.net','ad.doubleclick.net','stats.g.doubleclick.net',
+  'googlesyndication.com','pagead2.googlesyndication.com',
+  'googleadservices.com','www.googleadservices.com',
+  'adnxs.com','ib.adnxs.com','secure.adnxs.com',
+  'rubiconproject.com','fastlane.rubiconproject.com',
+  'pubmatic.com','ads.pubmatic.com',
+  'openx.net','us-u.openx.net',
+  'casalemedia.com','js.casalemedia.com',
+  'criteo.com','gum.criteo.com','criteo.net',
+  'outbrain.com','widgets.outbrain.com',
+  'taboola.com','cdn.taboola.com','trc.taboola.com',
+  'sharethrough.com','native.sharethrough.com',
+]);
+
 let _torEnabled    = false;
-let _torManager    = null;
-let _failedReqs    = 0;       // compteur requêtes bloquées (logging)
+let _blockTrackers = false;
+let _blockAds      = false;
+let _failedReqs    = 0;
+let _proxyOk       = false;
+let _proxyCheckedAt= 0;
 
-/* ══════════════════════════════════════════════════════════════
-   FAIL CLOSED — vérification proxy avant chaque requête
-══════════════════════════════════════════════════════════════ */
+const UA_TOR    = 'Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0';
+const UA_NORMAL = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-/** Cache du statut proxy (mis à jour toutes les 5s) */
-let _proxyReachable = false;
-let _lastProxyCheck = 0;
-const PROXY_CHECK_TTL = 5000;
-
-async function isProxyReachable() {
-  const now = Date.now();
-  if (now - _lastProxyCheck < PROXY_CHECK_TTL) return _proxyReachable;
-  _lastProxyCheck = now;
-
-  _proxyReachable = await new Promise((resolve) => {
+async function _checkProxy() {
+  if (Date.now() - _proxyCheckedAt < 5000) return _proxyOk;
+  _proxyCheckedAt = Date.now();
+  _proxyOk = await new Promise(r => {
     const s = new net.Socket();
     s.setTimeout(2000);
-    s.once('connect', () => { s.destroy(); resolve(true);  });
-    s.once('error',   () => { resolve(false); });
-    s.once('timeout', () => { s.destroy(); resolve(false); });
+    s.once('connect', () => { s.destroy(); r(true); });
+    s.once('error',   () => r(false));
+    s.once('timeout', () => { s.destroy(); r(false); });
     s.connect(9050, '127.0.0.1');
   });
-
-  if (!_proxyReachable && _torEnabled) {
-    console.error('[Privacy] FAIL CLOSED — proxy Tor injoignable');
-  }
-
-  return _proxyReachable;
+  return _proxyOk;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   CONFIGURATION DE SESSION
-══════════════════════════════════════════════════════════════ */
+function _handler(isTor) {
+  return async (details, callback) => {
+    try {
+      const url = details.url || '';
+      if (!url.startsWith('http')) return callback({});
 
-function configureSession(sess, mode) {
-  if (!sess) return;
-
-  const isTor     = mode === 'tor';
-  const isPrivate = mode === 'private' || isTor;
-
-  /* ── 1. FAIL CLOSED — intercepter toutes les requêtes ─────── */
-  if (isTor) {
-    sess.webRequest.onBeforeRequest(
-      { urls: ['<all_urls>'] },
-      async (details, callback) => {
-        // Autoriser les schémas locaux (fichiers app)
-        if (details.url.startsWith('file://') ||
-            details.url.startsWith('devtools://') ||
-            details.url.startsWith('chrome-extension://')) {
-          return callback({});
-        }
-
-        // Bloquer les protocoles dangereux
-        try {
-          const u = new URL(details.url);
-          if (BLOCKED_PROTOCOLS.has(u.protocol)) {
-            return callback({ cancel: true });
-          }
-        } catch {
-          return callback({ cancel: true });
-        }
-
-        // Vérification proxy (fail closed)
-        const proxyOk = await isProxyReachable();
-        if (!proxyOk) {
-          _failedReqs++;
-          console.warn(`[Privacy] BLOQUÉ (pas de proxy) : ${details.url.slice(0, 80)}`);
-          return callback({ cancel: true });
-        }
-
-        callback({});
-      }
-    );
-  }
-
-  /* ── 2. Blocage trackers ───────────────────────────────────── */
-  if (isPrivate) {
-    // En Tor, on a déjà le onBeforeRequest ci-dessus — on ajoute en deuxième
-    // handler pour les trackers (quand le proxy est OK)
-    sess.webRequest.onBeforeRequest(
-      { urls: TRACKER_PATTERNS },
-      (details, callback) => {
-        callback({ cancel: true });
-      }
-    );
-  }
-
-  /* ── 3. Headers — User-Agent uniforme + privacy ────────────── */
-  sess.webRequest.onBeforeSendHeaders(
-    { urls: ['<all_urls>'] },
-    (details, callback) => {
-      const h = { ...details.requestHeaders };
-
-      // User-Agent uniforme
-      h['User-Agent'] = isTor ? TOR_USER_AGENT : NORMAL_USER_AGENT;
-
-      // Sec-CH-UA : supprimer en Tor (révèle le moteur et sa version)
       if (isTor) {
-        delete h['sec-ch-ua'];
-        delete h['sec-ch-ua-mobile'];
-        delete h['sec-ch-ua-platform'];
-        delete h['sec-ch-ua-platform-version'];
-        delete h['sec-ch-ua-full-version-list'];
-        delete h['Sec-CH-UA'];
-        delete h['Sec-CH-UA-Mobile'];
-        delete h['Sec-CH-UA-Platform'];
+        if (!await _checkProxy()) { _failedReqs++; return callback({ cancel: true }); }
       }
 
-      // DNT + Sec-GPC toujours
-      h['DNT']     = '1';
-      h['Sec-GPC'] = '1';
+      let host = '';
+      try { host = new URL(url).hostname.toLowerCase(); }
+      catch { return callback({}); }
 
-      // Referer
-      const referer = h['Referer'] || h['referer'];
-      if (referer && isPrivate) {
-        try {
-          const refOrigin = new URL(referer).origin;
-          const reqOrigin = new URL(details.url).origin;
-          if (refOrigin !== reqOrigin) {
-            if (isTor) {
-              // Tor : supprimer complètement le referer cross-origin
-              delete h['Referer'];
-              delete h['referer'];
-            } else {
-              // Privé : garder seulement l'origin
-              h['Referer'] = refOrigin + '/';
-            }
-          }
-        } catch {}
+      if ((_blockTrackers || isTor) && TRACKER_DOMAINS.has(host)) {
+        return callback({ cancel: true });
       }
 
-      callback({ requestHeaders: h });
+      if (_blockAds && AD_DOMAINS.has(host)) {
+        return callback({ cancel: true });
+      }
+
+    } catch {}
+
+    callback({});
+  };
+}
+
+const _done = new WeakSet();
+
+function configureSession(sess, isTor) {
+  if (!sess || _done.has(sess)) return;
+  _done.add(sess);
+
+  sess.webRequest.onBeforeRequest(
+    { urls: ['http://*/*', 'https://*/*'] },
+    _handler(isTor)
+  );
+
+  sess.webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*'] },
+    (details, cb) => {
+      try {
+        const h = { ...details.requestHeaders };
+        h['User-Agent'] = isTor ? UA_TOR : UA_NORMAL;
+        h['DNT'] = '1'; h['Sec-GPC'] = '1';
+        if (isTor) {
+          ['sec-ch-ua','sec-ch-ua-mobile','sec-ch-ua-platform',
+           'Sec-CH-UA','Sec-CH-UA-Mobile','Sec-CH-UA-Platform'].forEach(k => delete h[k]);
+        }
+        cb({ requestHeaders: h });
+      } catch { cb({}); }
     }
   );
 
-  /* ── 4. Cookies tiers ──────────────────────────────────────── */
-  if (isPrivate) {
-    sess.webRequest.onHeadersReceived(
-      { urls: ['<all_urls>'] },
-      (details, callback) => {
-        const headers = { ...details.responseHeaders };
-        const key = Object.keys(headers).find(k => k.toLowerCase() === 'set-cookie');
-        if (key) {
-          const filtered = (headers[key] || []).filter(ck => {
-            const lc = ck.toLowerCase();
-            // Supprimer cookies SameSite=None (cross-site tracking)
-            if (lc.includes('samesite=none')) return false;
-            return true;
-          });
-          headers[key] = filtered;
-        }
-        callback({ responseHeaders: headers });
-      }
-    );
-  }
-
-  /* ── 5. WebRTC ─────────────────────────────────────────────── */
-  if (typeof sess.setWebRTCIPHandlingPolicy === 'function') {
-    if (isTor) {
-      // Désactiver complètement UDP non proxifié
-      sess.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
-    } else if (isPrivate) {
-      sess.setWebRTCIPHandlingPolicy('default_public_interface_only');
-    } else {
-      sess.setWebRTCIPHandlingPolicy('default');
+  try {
+    if (typeof sess.setWebRTCIPHandlingPolicy === 'function') {
+      sess.setWebRTCIPHandlingPolicy(isTor ? 'disable_non_proxied_udp' : 'default');
     }
-  }
+  } catch {}
 
-  /* ── 6. Permissions ────────────────────────────────────────── */
-  const ALLOWED_PERMS = new Set([
-    'clipboard-read', 'clipboard-write', 'clipboard-sanitized-write',
-    'fullscreen', 'media', 'accessibility-events',
-  ]);
-
-  sess.setPermissionRequestHandler((wc, permission, callback) => {
-    // En mode Tor : géolocalisation toujours bloquée
-    if (isTor && permission === 'geolocation') return callback(false);
-    callback(ALLOWED_PERMS.has(permission));
-  });
-
-  sess.setPermissionCheckHandler((wc, permission, origin) => {
-    if (isTor && permission === 'geolocation') return false;
-    if (['clipboard-write','clipboard-read','clipboard-sanitized-write'].includes(permission)) return true;
-    return ALLOWED_PERMS.has(permission);
-  });
-
-  console.log(`[Privacy] Session configurée — mode "${mode}"`);
+  const ALLOWED = new Set(['clipboard-read','clipboard-write','clipboard-sanitized-write','fullscreen','media','accessibility-events']);
+  try {
+    sess.setPermissionRequestHandler((_, p, cb) => {
+      if (isTor && p === 'geolocation') return cb(false);
+      cb(ALLOWED.has(p));
+    });
+    sess.setPermissionCheckHandler((_, p) => {
+      if (isTor && p === 'geolocation') return false;
+      if (['clipboard-write','clipboard-read','clipboard-sanitized-write'].includes(p)) return true;
+      return ALLOWED.has(p);
+    });
+  } catch {}
 }
 
-/* ══════════════════════════════════════════════════════════════
-   NETTOYAGE COMPLET À LA FERMETURE
-   Appelé depuis app.on('before-quit')
-══════════════════════════════════════════════════════════════ */
+function initialize(settings) {
+  _torEnabled    = !!settings?.torEnabled;
+  _blockTrackers = !!settings?.blockTrackers;
+  _blockAds      = !!settings?.blockAds;
+
+  const isTor = _torEnabled;
+  configureSession(session.fromPartition('persist:main'), isTor);
+  configureSession(session.defaultSession, isTor);
+
+  app.on('web-contents-created', (_, c) => {
+    try { configureSession(c.session, _torEnabled); } catch {}
+  });
+  app.on('session-created', s => {
+    try { configureSession(s, _torEnabled); } catch {}
+  });
+  app.on('before-quit', async () => {
+    try { await clearAllSensitiveData(); } catch {}
+  });
+}
+
+function setTorMode(v)       { _torEnabled    = v; _proxyCheckedAt = 0; }
+function setBlockTrackers(v) { _blockTrackers = v; }
+function setBlockAds(v)      { _blockAds      = v; }
 
 async function clearAllSensitiveData() {
-  const sessions = [
+  for (const s of [
     session.defaultSession,
     session.fromPartition('persist:main'),
     session.fromPartition('persist:private'),
-  ];
-
-  const clearOpts = {
-    storages: ['cookies', 'filesystem', 'indexdb', 'localstorage',
-               'shadercache', 'websql', 'serviceworkers', 'cachestorage'],
-  };
-
-  for (const sess of sessions) {
-    try {
-      // Toujours effacer cache
-      await sess.clearCache();
-      // En mode Tor : effacer tout
-      if (_torEnabled) {
-        await sess.clearStorageData(clearOpts);
-        console.log('[Privacy] Données de session effacées (mode Tor)');
-      }
-    } catch (e) {
-      console.warn('[Privacy] Erreur nettoyage session:', e.message);
+  ]) {
+    try { await s.clearCache(); } catch {}
+    if (_torEnabled) {
+      try { await s.clearStorageData({ storages: ['cookies','filesystem','indexdb','localstorage','shadercache','websql','serviceworkers','cachestorage'] }); } catch {}
     }
   }
 }
 
-/* ══════════════════════════════════════════════════════════════
-   HOOKS GLOBAUX
-══════════════════════════════════════════════════════════════ */
-
-/** À appeler une fois au démarrage depuis main.js */
-function initialize(settings, torManager) {
-  _torEnabled  = !!settings?.torEnabled;
-  _torManager  = torManager;
-
-  // Session principale
-  const mainMode = _torEnabled ? 'tor' : 'normal';
-  configureSession(session.fromPartition('persist:main'), mainMode);
-  configureSession(session.defaultSession, mainMode);
-
-  // Hook : configurer toutes les nouvelles sessions à la volée
-  app.on('web-contents-created', (_, contents) => {
-    const sess = contents.session;
-    if (!sess) return;
-    const isPersistent = sess.isPersistent?.() ?? true;
-    const mode = _torEnabled ? 'tor' : (isPersistent ? 'normal' : 'private');
-    configureSession(sess, mode);
-  });
-
-  // Hook session-created (pour capturer les sessions créées dynamiquement)
-  app.on('session-created', (sess) => {
-    const mode = _torEnabled ? 'tor' : 'normal';
-    configureSession(sess, mode);
-  });
-
-  // Nettoyage avant fermeture
-  app.on('before-quit', async () => {
-    await clearAllSensitiveData();
-  });
-
-  console.log(`[Privacy] Initialisé — mode: ${mainMode}`);
-}
-
-/** Appelé quand l'utilisateur active/désactive Tor */
-function setTorMode(enabled) {
-  _torEnabled = enabled;
-  _lastProxyCheck = 0; // forcer re-vérification proxy
-}
-
-/** Stats non sensibles pour logging/UI */
 function getStats() {
-  return {
-    mode:          _torEnabled ? 'tor' : 'normal',
-    blockedReqs:   _failedReqs,
-    proxyReachable: _proxyReachable,
-  };
+  return { torEnabled: _torEnabled, blockTrackers: _blockTrackers, blockAds: _blockAds, blockedReqs: _failedReqs };
 }
 
-module.exports = {
-  initialize,
-  setTorMode,
-  configureSession,
-  clearAllSensitiveData,
-  getStats,
-  isProxyReachable,
-};
+function isProxyReachable() { return _proxyOk; }
+
+module.exports = { initialize, setTorMode, setBlockTrackers, setBlockAds, configureSession, clearAllSensitiveData, getStats, isProxyReachable };

@@ -190,7 +190,6 @@ function _openCustomizeTab() {
 
   const id = ++tabCounter;
   const webview = document.createElement('webview');
-  
   webview.setAttribute('partition', 'persist:main');
   webview.setAttribute('allowpopups', '');
   webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no');
@@ -340,12 +339,14 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   // ── Fermer le context menu dès qu'on interagit avec la webview ──
   // Les évts mousedown/click ne se propagent pas depuis la webview
   // (process séparé). On écoute focus et did-start-navigate à la place.
-  webview.addEventListener('focus', () => {
-    window._hideContextMenu?.();
-  });
-  // Clic dans la zone webview capturé par le conteneur parent
-  webview.addEventListener('mousedown', () => {
-    window._hideContextMenu?.();
+  webview.addEventListener('focus', () => window._hideContextMenu?.());
+
+  // Recevoir le signal de clic gauche depuis le preload-webview
+  // C'est la SEULE façon fiable de détecter un clic dans le process séparé
+  webview.addEventListener('ipc-message', (e) => {
+    if (e.channel === 'hide-context-menu') {
+      window._hideContextMenu?.();
+    }
   });
 
   webview.addEventListener('did-start-loading', () => {
@@ -425,8 +426,7 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   webview.addEventListener('close', () => {
     closeTab(id);
   });
-
-  /* ── Vault & menus : messages depuis le content script (preload-webview) ── */
+  /* ── Vault: messages depuis le content script (preload-webview) ── */
   webview.addEventListener('ipc-message', (e) => {
     if (e.channel === 'vault:credentials-submitted') {
       const { username, password, url } = e.args[0] || {};
@@ -442,21 +442,11 @@ function createTab(url = 'about:newtab', isPrivate = false) {
         });
       }
     }
-
     if (e.channel === 'vault:field-focused') {
       const { url, rect } = e.args[0] || {};
       if (url && !isPrivate) {
         offerAutofill(url, webview, rect);
       }
-    }
-
-    // ── Fermeture des menus au clic dans la webview ──────────
-    // Les clics dans le contenu d'une webview ne remontent pas au
-    // document parent (processus séparé). preload-webview.js envoie
-    // ce message à chaque mousedown dans la page pour combler ce gap.
-    if (e.channel === 'page:mousedown') {
-      closeAllPanels();
-      window._hideContextMenu?.();
     }
   });
 

@@ -263,7 +263,7 @@ const SettingsManager = (() => {
     // Lire la version réelle depuis l'API
     window.discowlAPI.app.getVersion().then(v => {
       const vEl = document.getElementById('settings-version-label');
-      if (vEl) vEl.textContent = v || '1.4.0';
+      if (vEl) vEl.textContent = v || '1.4.1';
     }).catch(() => {});
 
     sec.appendChild(makeGroup(i18n.t('settings.application'), [
@@ -406,6 +406,39 @@ const SettingsManager = (() => {
   }
 
   /* ── Privacy ───────────────────────────────────────────────── */
+  function _refreshAdBlockStats() {
+    const panel = document.getElementById('adblock-stats-panel');
+    if (!panel) return;
+    window.discowlAPI.adblock?.stats().then(info => {
+      if (!info) { panel.innerHTML = '<span style="color:var(--text-muted)">AdBlock unavailable</span>'; return; }
+      const { enabled, ruleCount, domainCount, stats } = info;
+      panel.innerHTML = [
+        `<div style="display:flex;justify-content:space-between;margin-bottom:6px">`,
+        `  <span style="font-weight:600;color:var(--text-primary)">${enabled ? '✓ AdBlock active' : '○ AdBlock disabled'}</span>`,
+        `  <button style="font-size:11px;padding:2px 8px;border-radius:4px;background:var(--bg-hover);border:1px solid var(--border);color:var(--text-muted);cursor:pointer" id="adblock-reset-btn">Reset stats</button>`,
+        `</div>`,
+        `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">`,
+        `  <span>Rules loaded:</span><span style="color:var(--text-primary);text-align:right">${(ruleCount||0).toLocaleString()}</span>`,
+        `  <span>Domains indexed:</span><span style="color:var(--text-primary);text-align:right">${(domainCount||0).toLocaleString()}</span>`,
+        `  <span>Requests blocked:</span><span style="color:#f87171;text-align:right">${(stats?.blocked||0).toLocaleString()}</span>`,
+        `  <span>Requests allowed:</span><span style="color:#34d399;text-align:right">${(stats?.allowed||0).toLocaleString()}</span>`,
+        `</div>`,
+        `<button style="margin-top:8px;font-size:11px;padding:3px 10px;border-radius:4px;background:var(--bg-hover);border:1px solid var(--border);color:var(--text-muted);cursor:pointer" id="adblock-update-btn">Update filter lists</button>`,
+      ].join('');
+      panel.querySelector('#adblock-reset-btn')?.addEventListener('click', async () => {
+        await window.discowlAPI.adblock?.resetStats();
+        _refreshAdBlockStats();
+      });
+      panel.querySelector('#adblock-update-btn')?.addEventListener('click', async () => {
+        const btn = panel.querySelector('#adblock-update-btn');
+        if (btn) btn.textContent = 'Updating…';
+        const r = await window.discowlAPI.adblock?.forceUpdate();
+        if (btn) btn.textContent = `Updated — ${(r?.count||0).toLocaleString()} rules`;
+        setTimeout(_refreshAdBlockStats, 2000);
+      });
+    }).catch(() => {});
+  }
+
   function buildPrivacy() {
     const sec = document.getElementById('settings-privacy');
     if (!sec) return;
@@ -446,6 +479,15 @@ const SettingsManager = (() => {
         })
       ),
     ]));
+
+    // Panneau de stats adblock (construction dynamique)
+    const adblockStats = document.createElement('div');
+    adblockStats.id = 'adblock-stats-panel';
+    adblockStats.style.cssText = 'padding:10px 14px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-secondary);margin:0 0 12px';
+    adblockStats.innerHTML = '<span style="color:var(--text-muted)">Loading stats…</span>';
+    sec.appendChild(adblockStats);
+
+    _refreshAdBlockStats();
 
     sec.appendChild(makeGroup(i18n.t('settings.always_private_group'), [
       makeRow(

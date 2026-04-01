@@ -15,17 +15,20 @@
   let _params        = null;
 
   // ── Fermeture ─────────────────────────────────────────────
+  let _menuOpenTime = 0;
+
   function hideCtx() {
+    // Guard : ignorer si le menu vient juste d'être ouvert (< 80ms)
+    // Sinon le mousedown qui déclenche le context-menu le ferme immédiatement
+    if (Date.now() - _menuOpenTime < 80) return;
     menu.classList.add('hidden');
     menu.innerHTML = '';
     _params = null;
   }
 
-  document.addEventListener('mousedown', (e) => {
-  if (e.button === 0) { // clic gauche uniquement
-    hideCtx();
-    }
-  }, true);
+  // Fermer sur TOUT clic gauche en capture phase — document ET webview
+  document.addEventListener('mousedown', () => hideCtx(), true);
+  document.addEventListener('click',     () => hideCtx(), true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx(); });
 
   // ── Helpers de construction ────────────────────────────────
@@ -232,12 +235,14 @@
 
   // ── Point d'entrée ─────────────────────────────────────────
   window._showContextMenu = function(wv, params, screenX, screenY) {
-    hideCtx();
-    // Fermer aussi le menu contextuel de la toolbar s'il est ouvert
     document.getElementById('toolbar-ctx-menu')?.remove();
+    menu.innerHTML = '';
+    menu.classList.add('hidden');
+    _params = null;
     _activeWebview = wv;
     _params        = params;
     buildMenu(wv, params);
+    _menuOpenTime = Date.now();
     // Attendre que le DOM soit calculé pour positionner
     requestAnimationFrame(() => positionMenu(screenX, screenY));
   };

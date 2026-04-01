@@ -5,7 +5,8 @@ const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
 
-const TorManager      = require('./torManager');
+const TorManager        = require('./torManager');
+const { initAdBlock, registerIpc: registerAdBlockIpc, setAdBlockEnabled, setTorMode } = require('./adBlockSession');
 const privacyManager  = require('./privacyManager');
 
 const passwordManager = require('./passwordManager');
@@ -147,7 +148,12 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = settings.theme === 'dark' ? 'dark' : 'light';
 
   // Initialiser le gestionnaire de confidentialité
-  privacyManager.initialize(settings, torManager);
+  privacyManager.initialize(settings);
+
+  // Initialiser le bloqueur de pub
+  if (settings.torEnabled) setTorMode(true);
+  await initAdBlock(settings, privacyManager).catch(e => console.warn('[AdBlock] init error:', e.message));
+  registerAdBlockIpc();
 
   // Enregistrer les IPC update (check manuel depuis Settings)
   registerUpdaterIpc(() => mainWindow);
@@ -391,6 +397,14 @@ ipcMain.handle('settings:save', async (_, newSettings) => {
     'clearOnExit','doh','blockFingerprinting','blockThirdPartyCookies',
     'blockYoutubeAds','privacyLevel','proxy','ntpBackground','alwaysPrivate',
   ]);
+  // Mise a jour a chaud
+  if (newSettings.blockAds !== undefined) {
+    setAdBlockEnabled(!!newSettings.blockAds);
+    privacyManager.setBlockAds(!!newSettings.blockAds);
+  }
+  if (newSettings.blockTrackers !== undefined) {
+    privacyManager.setBlockTrackers(!!newSettings.blockTrackers);
+  }
   const safe = {};
   for (const [k, v] of Object.entries(newSettings)) {
     if (ALLOWED_KEYS.has(k)) safe[k] = v;
@@ -532,6 +546,7 @@ ipcMain.on('window:setBounds', (_, b) => {
   const { x, y, width, height } = b;
   if (typeof width  !== 'number' || width  < 200 || width  > 7680) return;
   if (typeof height !== 'number' || height < 150 || height > 4320) return;
+  // Mise à jour à chaud
   const safe = {};
   if (typeof x === 'number') safe.x = Math.round(x);
   if (typeof y === 'number') safe.y = Math.round(y);

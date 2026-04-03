@@ -357,7 +357,7 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   });
 
   webview.addEventListener('did-stop-loading', () => {
-    tab.isLoading = false;
+    tab.isLoading    = false;
     tab.canGoBack    = webview.canGoBack();
     tab.canGoForward = webview.canGoForward();
     refreshTab(id);
@@ -374,11 +374,11 @@ function createTab(url = 'about:newtab', isPrivate = false) {
     tab.canGoForward = webview.canGoForward();
     refreshTab(id);
     if (activeTabId === id) {
+      updateNavButtons(); // ← Bug 2 fix : manquait ici
       updateUrlBar(e.url);
       updateSecurityIcon(e.url);
       updateBookmarkStar(e.url);
     }
-    // Don't log private tabs in history
     if (!isPrivate && e.url && !e.url.startsWith('about:')) {
       HistoryManager.addEntry(tab.title, e.url, tab.favicon);
     }
@@ -386,8 +386,12 @@ function createTab(url = 'about:newtab', isPrivate = false) {
 
   webview.addEventListener('did-navigate-in-page', (e) => {
     if (e.isMainFrame) {
-      tab.url = e.url;
+      tab.url          = e.url;
+      // Bug 1 fix : les SPAs naviguent ici — mettre à jour canGoForward aussi
+      tab.canGoBack    = webview.canGoBack();
+      tab.canGoForward = webview.canGoForward();
       if (activeTabId === id) {
+        updateNavButtons();
         updateUrlBar(e.url);
         updateBookmarkStar(e.url);
       }
@@ -1086,9 +1090,11 @@ function setupToolbar() {
     if (tab.webview.canGoForward()) {
       tab.webview.goForward();
     } else if (!tab.url && tab._nextAfterNewtab) {
+      // Forward virtuel : newtab → page précédente
+      // On ne remet PAS _prevWasNewtab=true ici — navigateActive() le fera
+      // si nécessaire. Le reset de _nextAfterNewtab suffit.
       const next = tab._nextAfterNewtab;
       tab._nextAfterNewtab = '';
-      tab._prevWasNewtab   = true;
       navigateActive(next);
     }
   });

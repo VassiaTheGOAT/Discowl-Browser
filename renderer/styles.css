@@ -3693,3 +3693,269 @@ body.window-maximized .rz { display: none; }
 .ut-btn-pause:hover { background: rgba(251,191,36,.2); }
 .ut-btn-cancel { background: rgba(248,113,113,.1); color: #f87171; border: 1px solid rgba(248,113,113,.2); }
 .ut-btn-cancel:hover { background: rgba(248,113,113,.2); }
+
+/* ════════════════════════════════════════════════════════════════
+   UPDATE BAR — barre de mise à jour professionnelle
+   Position : fixée en bas, slide-up animé
+   ════════════════════════════════════════════════════════════════ */
+
+.upd-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 19000;
+  background: var(--bg-modal);
+  border-top: 1px solid var(--border-strong);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.35), 0 -1px 0 rgba(255,255,255,0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transform: translateY(100%);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+              opacity   0.28s ease;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* Visible */
+.upd-bar[data-state]:not([data-state="hidden"]) {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Sections (une par état) ── */
+.upd-section {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  min-height: 52px;
+}
+
+.upd-bar[data-state="available"]    .upd-section[data-section="available"]    { display: flex; }
+.upd-bar[data-state="downloading"]  .upd-section[data-section="downloading"]  { display: flex; }
+.upd-bar[data-state="ready"]        .upd-section[data-section="ready"]        { display: flex; }
+.upd-bar[data-state="error"]        .upd-section[data-section="error"]        { display: flex; }
+
+/* ── Icône ronde ── */
+.upd-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.upd-icon-info { background: rgba(74,158,255,0.15); color: var(--accent); }
+.upd-icon-dl   { background: rgba(74,158,255,0.10); color: var(--accent); }
+.upd-icon-ok   { background: rgba(74,222,128,0.15); color: var(--green); }
+.upd-icon-err  { background: rgba(251,191,36,0.15);  color: var(--yellow); }
+
+/* Spinner de téléchargement */
+.upd-spin-icon {
+  animation: updSpin 0.9s linear infinite;
+}
+@keyframes updSpin { to { transform: rotate(360deg); } }
+
+/* ── Contenu texte ── */
+.upd-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.upd-content-dl {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding: 2px 0;
+}
+
+.upd-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upd-label strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.upd-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Rangée haute du mode DL ── */
+.upd-dl-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upd-pct {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* ── Barre de progression ── */
+.upd-progress-track {
+  width: 100%;
+  height: 5px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.upd-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent) 0%, #74b8ff 100%);
+  border-radius: 3px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+/* Shimmer sur la barre */
+.upd-progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    transparent         0%,
+    rgba(255,255,255,.2) 50%,
+    transparent         100%);
+  animation: updShimmer 1.8s ease-in-out infinite;
+}
+@keyframes updShimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* ── Métadonnées (vitesse / taille) ── */
+.upd-dl-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upd-speed,
+.upd-size {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.upd-speed::before {
+  content: '↓ ';
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+/* ── Boutons d'action ── */
+.upd-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.upd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: filter .15s, background .15s, transform .1s;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.upd-btn:active { transform: scale(0.97); }
+
+/* Primary — télécharger / installer */
+.upd-btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.upd-btn-primary:hover { filter: brightness(1.12); }
+
+/* Installer — légère teinte verte */
+.upd-btn-install {
+  background: #16a34a;
+}
+
+[data-theme="light"] .upd-btn-install { background: #15803d; }
+
+/* Ghost — "Plus tard" */
+.upd-btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.upd-btn-ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Danger — Annuler */
+.upd-btn-danger {
+  background: rgba(248,113,113,0.1);
+  color: var(--red);
+  border: 1px solid rgba(248,113,113,0.22);
+}
+.upd-btn-danger:hover { background: rgba(248,113,113,0.2); }
+
+/* ── Bouton fermer (×) ── */
+.upd-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+.upd-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Couleurs thème clair ── */
+[data-theme="light"] .upd-bar {
+  background: rgba(255,255,255,0.96);
+  border-top-color: rgba(0,0,0,0.1);
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+}
+
+/* ── Toast container — remonter quand la barre est visible ── */
+.upd-bar:not([data-state="hidden"]) ~ #toast-container,
+#update-bar:not([data-state="hidden"]) ~ #toast-container {
+  bottom: 68px;
+}

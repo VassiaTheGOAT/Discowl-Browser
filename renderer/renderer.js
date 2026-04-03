@@ -2057,12 +2057,15 @@ function initMenubar() {
   mb('passwords',        () => _openPasswordsTab());
   mb('github',           () => window.discowlAPI.shell.openExternal('https://github.com/VassiaTheGOAT/Discowl-Browser'));
   mb('check-updates',    async () => {
-    showToast(i18n.t('toast.update_check'), 'info');
+    showToast(i18n.t('toast.update_check') || 'Vérification des mises à jour…', 'info');
     try {
       const result = await window.discowlAPI.updates.check();
-      if (result.upToDate) showToast(i18n.t('settings.up_to_date'), 'success');
-      else showToast(`Update ${result.latest} available — restart to install`, 'info');
-    } catch { showToast(i18n.t('settings.update_error'), 'error'); }
+      if (result.upToDate) {
+        showToast(i18n.t('settings.up_to_date') || 'Déjà à jour', 'success');
+      } else {
+        updBar.show('available', { version: result.latest });
+      }
+    } catch { showToast(i18n.t('settings.update_error') || 'Erreur de vérification', 'error'); }
   });
 }
 
@@ -2737,3 +2740,225 @@ function showToast(message, type = 'info') {
 
 // Make showToast global (used by components)
 window.showToast = showToast;
+/* ══════════════════════════════════════════════════════════════
+   UPDATE BAR SYSTEM
+   Gère la barre de mise à jour professionnelle en bas de l'app.
+
+   États :
+     hidden      → barre masquée (aucune MAJ)
+     available   → MAJ disponible, bouton Télécharger
+     downloading → téléchargement en cours, barre de progression
+     ready       → prêt à installer, bouton Redémarrer
+     error       → erreur de téléchargement
+
+   Flux :
+     updater:update-available  → show('available')
+     updater:download-progress → show('downloading') + mise à jour barre
+     updater:update-ready      → show('ready')
+     updater:download-error    → show('error')
+══════════════════════════════════════════════════════════════ */
+
+const updBar = (() => {
+  // ── Éléments DOM ────────────────────────────────────────────
+  const bar = document.getElementById('update-bar');
+  if (!bar) return { show: () => {}, hide: () => {} };
+
+  const els = {
+    // available
+    versionAvail:  document.getElementById('upd-version-avail'),
+    btnDownload:   document.getElementById('upd-btn-download'),
+    btnLaterAvail: document.getElementById('upd-btn-later-avail'),
+    closeAvail:    document.getElementById('upd-close-avail'),
+    // downloading
+    versionDl:     document.getElementById('upd-version-dl'),
+    pct:           document.getElementById('upd-pct'),
+    fill:          document.getElementById('upd-fill'),
+    speed:         document.getElementById('upd-speed'),
+    size:          document.getElementById('upd-size'),
+    btnCancel:     document.getElementById('upd-btn-cancel'),
+    // ready
+    versionReady:  document.getElementById('upd-version-ready'),
+    btnInstall:    document.getElementById('upd-btn-install'),
+    btnLaterReady: document.getElementById('upd-btn-later-ready'),
+    closeReady:    document.getElementById('upd-close-ready'),
+    // error
+    errText:       document.getElementById('upd-err-text'),
+    btnRetry:      document.getElementById('upd-btn-retry'),
+    closeErr:      document.getElementById('upd-close-err'),
+  };
+
+  // Version en cours (pour le retry)
+  let _currentVersion = null;
+
+  // ── Helper format octets ─────────────────────────────────────
+  function _fmt(b) {
+    if (!b || b <= 0) return '';
+    if (b < 1024)       return b + ' B';
+    if (b < 1_048_576)  return (b / 1024).toFixed(1) + ' Ko';
+    return (b / 1_048_576).toFixed(1) + ' Mo';
+  }
+
+  // ── Afficher un état ─────────────────────────────────────────
+  function show(state, data = {}) {
+    bar.dataset.state = state;
+
+    if (state === 'available') {
+      _currentVersion = data.version || '';
+      if (els.versionAvail) els.versionAvail.textContent = _currentVersion;
+    }
+
+    if (state === 'downloading') {
+      if (data.version && els.versionDl)
+        els.versionDl.textContent = data.version;
+
+      // Mise à jour de la progression
+      if (data.percent !== undefined) {
+        const pct = Math.max(0, Math.min(100, data.percent));
+        if (els.pct)  els.pct.textContent  = pct + '%';
+        if (els.fill) els.fill.style.width = pct + '%';
+      }
+      if (data.bytesPerSecond !== undefined && els.speed) {
+        els.speed.textContent = _fmt(data.bytesPerSecond) + '/s';
+      }
+      if (data.transferred !== undefined && data.total !== undefined && els.size) {
+        els.size.textContent = _fmt(data.transferred) + ' / ' + _fmt(data.total);
+      }
+    }
+
+    if (state === 'ready') {
+      if (els.versionReady)
+        els.versionReady.textContent = data.version || _currentVersion || '';
+    }
+
+    if (state === 'error') {
+      if (els.errText)
+        els.errText.textContent = data.message || 'Vérifiez votre connexion et réessayez.';
+    }
+  }
+
+  function hide() {
+    bar.dataset.state = 'hidden';
+  }
+
+  // ── Boutons ──────────────────────────────────────────────────
+
+  // [Télécharger]
+  if (els.btnDownload) {
+    els.btnDownload.addEventListener('click', async () => {
+      // Passer immédiatement en mode downloading (feedback instantané)
+      show('downloading', { version: _currentVersion, percent: 0 });
+      if (els.pct)  els.pct.textContent  = '0%';
+      if (els.fill) els.fill.style.width = '0%';
+      try {
+        await window.discowlAPI.updates.download();
+      } catch (e) {
+        show('error', { message: e?.message });
+      }
+    });
+  }
+
+  // [Annuler]
+  if (els.btnCancel) {
+    els.btnCancel.addEventListener('click', async () => {
+      try { await window.discowlAPI.updates.cancel(); } catch {}
+      hide();
+    });
+  }
+
+  // [Redémarrer et installer]
+  if (els.btnInstall) {
+    els.btnInstall.addEventListener('click', async () => {
+      // Désactiver le bouton pour éviter les double-clics
+      els.btnInstall.disabled = true;
+      els.btnInstall.textContent = 'Installation en cours…';
+      try {
+        await window.discowlAPI.updates.install();
+        // L'app va se fermer — NSIS prend la main
+      } catch (e) {
+        els.btnInstall.disabled = false;
+        els.btnInstall.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Redémarrer et installer`;
+        show('error', { message: e?.message });
+      }
+    });
+  }
+
+  // [Plus tard] (état available)
+  if (els.btnLaterAvail) {
+    els.btnLaterAvail.addEventListener('click', () => {
+      window.discowlAPI.updates.defer?.().catch(() => {});
+      hide();
+    });
+  }
+
+  // [Plus tard] (état ready — MAJ prête, on garde pour plus tard)
+  if (els.btnLaterReady) {
+    els.btnLaterReady.addEventListener('click', () => {
+      hide();
+      // Réafficher un rappel discret via toast
+      showToast('Mise à jour disponible — elle sera installée au prochain redémarrage.', 'info');
+    });
+  }
+
+  // [×] fermer (available, ready, error)
+  [els.closeAvail, els.closeReady, els.closeErr].forEach(btn => {
+    if (btn) btn.addEventListener('click', () => {
+      window.discowlAPI.updates.defer?.().catch(() => {});
+      hide();
+    });
+  });
+
+  // [Réessayer]
+  if (els.btnRetry) {
+    els.btnRetry.addEventListener('click', async () => {
+      show('downloading', { version: _currentVersion, percent: 0 });
+      if (els.pct)  els.pct.textContent  = '0%';
+      if (els.fill) els.fill.style.width = '0%';
+      try {
+        await window.discowlAPI.updates.download();
+      } catch (e) {
+        show('error', { message: e?.message });
+      }
+    });
+  }
+
+  return { show, hide };
+})();
+
+/* ── Brancher les événements IPC update ──────────────────── */
+(function initUpdateListeners() {
+  const api = window.discowlAPI?.updates;
+  if (!api) return;
+
+  // MAJ disponible → afficher la barre
+  // Le preload expose : onAvailable (pas onUpdateAvailable)
+  api.onAvailable?.((data) => {
+    updBar.show('available', { version: data.version });
+  });
+
+  // Progression du téléchargement
+  api.onDownloadProgress?.((data) => {
+    updBar.show('downloading', {
+      version:        data.version,
+      percent:        data.percent,
+      bytesPerSecond: data.bytesPerSecond,
+      transferred:    data.transferred,
+      total:          data.total,
+    });
+  });
+
+  // Téléchargement terminé → prêt à installer
+  // Le preload expose : onReady (pas onUpdateReady)
+  api.onReady?.((data) => {
+    updBar.show('ready', { version: data.version });
+  });
+
+  // Erreur de téléchargement
+  // Le preload expose : onError (pas onDownloadError)
+  api.onError?.((data) => {
+    updBar.show('error', { message: data.message });
+  });
+})();

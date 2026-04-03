@@ -891,6 +891,111 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════
+     UPDATE BAR — barre de mise à jour professionnelle
+     États : available | downloading | ready | error
+     ══════════════════════════════════════════════════════════ -->
+<div id="update-bar" class="upd-bar" data-state="hidden" role="status" aria-live="polite">
+
+  <!-- ── État : mise à jour disponible ── -->
+  <div class="upd-section" data-section="available">
+    <div class="upd-icon-wrap upd-icon-info">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <path d="M7.5 1.5v6M7.5 10.5v.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        <circle cx="7.5" cy="7.5" r="6.25" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="upd-content">
+      <span class="upd-label">Discowl <strong id="upd-version-avail"></strong> est disponible</span>
+    </div>
+    <div class="upd-actions">
+      <button class="upd-btn upd-btn-primary" id="upd-btn-download">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M6 1v7M3 6l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Télécharger
+      </button>
+      <button class="upd-btn upd-btn-ghost" id="upd-btn-later-avail">Plus tard</button>
+    </div>
+    <button class="upd-close" id="upd-close-avail" title="Fermer">
+      <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <!-- ── État : téléchargement en cours ── -->
+  <div class="upd-section" data-section="downloading">
+    <div class="upd-icon-wrap upd-icon-dl">
+      <svg class="upd-spin-icon" width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <path d="M7.5 1A6.5 6.5 0 1 1 1 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="upd-content upd-content-dl">
+      <div class="upd-dl-top">
+        <span class="upd-label">Téléchargement Discowl <strong id="upd-version-dl"></strong></span>
+        <span class="upd-pct" id="upd-pct">0%</span>
+      </div>
+      <div class="upd-progress-track">
+        <div class="upd-progress-fill" id="upd-fill"></div>
+      </div>
+      <div class="upd-dl-meta">
+        <span class="upd-speed" id="upd-speed"></span>
+        <span class="upd-size"  id="upd-size"></span>
+      </div>
+    </div>
+    <div class="upd-actions">
+      <button class="upd-btn upd-btn-danger" id="upd-btn-cancel">Annuler</button>
+    </div>
+  </div>
+
+  <!-- ── État : prêt à installer ── -->
+  <div class="upd-section" data-section="ready">
+    <div class="upd-icon-wrap upd-icon-ok">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <circle cx="7.5" cy="7.5" r="6.25" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M4.5 7.5l2.2 2.2 3.8-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="upd-content">
+      <span class="upd-label">Discowl <strong id="upd-version-ready"></strong> prêt à installer</span>
+      <span class="upd-sub">L'app redémarrera automatiquement</span>
+    </div>
+    <div class="upd-actions">
+      <button class="upd-btn upd-btn-primary upd-btn-install" id="upd-btn-install">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Redémarrer et installer
+      </button>
+      <button class="upd-btn upd-btn-ghost" id="upd-btn-later-ready">Plus tard</button>
+    </div>
+    <button class="upd-close" id="upd-close-ready" title="Fermer">
+      <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <!-- ── État : erreur ── -->
+  <div class="upd-section" data-section="error">
+    <div class="upd-icon-wrap upd-icon-err">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <path d="M7.5 5v3.5M7.5 10.5v.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M6.13 2.12L1.1 11A1.6 1.6 0 002.48 13.4h10.04a1.6 1.6 0 001.38-2.4L8.87 2.12a1.6 1.6 0 00-2.74 0z" stroke="currentColor" stroke-width="1.4"/>
+      </svg>
+    </div>
+    <div class="upd-content">
+      <span class="upd-label">Erreur de téléchargement</span>
+      <span class="upd-sub" id="upd-err-text"></span>
+    </div>
+    <div class="upd-actions">
+      <button class="upd-btn upd-btn-ghost" id="upd-btn-retry">Réessayer</button>
+    </div>
+    <button class="upd-close" id="upd-close-err" title="Fermer">
+      <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+</div>
+
 <!-- Toast notifications -->
 <div id="toast-container" aria-live="polite"></div>
 

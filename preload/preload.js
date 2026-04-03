@@ -111,26 +111,9 @@ contextBridge.exposeInMainWorld('discowlAPI', {
   },
 
 
-  /* ── AdBlock ─────────────────────────────────────────────── */
-  adblock: {
-    stats:       ()      => ipcRenderer.invoke('adblock:stats'),
-    toggle:      (on)    => ipcRenderer.invoke('adblock:toggle', on),
-    getRules:    ()      => ipcRenderer.invoke('adblock:getRules'),
-    saveRules:   (text)  => ipcRenderer.invoke('adblock:saveRules', text),
-    forceUpdate: ()      => ipcRenderer.invoke('adblock:forceUpdate'),
-    resetStats:  ()      => ipcRenderer.invoke('adblock:resetStats'),
-  },
-
   /* ── Dialog ──────────────────────────────────────────────── */
   dialog: {
-    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
-    openFile:      ()         => ipcRenderer.invoke('dialog:openFile'),
-    saveFile:      (opts)     => ipcRenderer.invoke('dialog:saveFile', opts),
-  },
-
-  /* ── File I/O (écriture sécurisée — validation côté main) ── */
-  file: {
-    write: (filePath, content) => ipcRenderer.invoke('file:write', filePath, content),
+    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
   },
 
   /* ── Updates ─────────────────────────────────────────────── */

@@ -153,7 +153,7 @@ function initialize(settings) {
   _blockAds      = !!settings?.blockAds;
 
   const isTor = _torEnabled;
-  configureSession(session.fromPartition('persist:main'), isTor);
+  configureSession(session.fromPartition(''), isTor);
   configureSession(session.defaultSession, isTor);
 
   app.on('web-contents-created', (_, c) => {
@@ -174,7 +174,7 @@ function setBlockAds(v)      { _blockAds      = v; }
 async function clearAllSensitiveData() {
   for (const s of [
     session.defaultSession,
-    session.fromPartition('persist:main'),
+    session.fromPartition(''),
     session.fromPartition('persist:private'),
   ]) {
     try { await s.clearCache(); } catch {}

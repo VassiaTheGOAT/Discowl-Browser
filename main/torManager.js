@@ -148,10 +148,15 @@ class TorManager {
         if (!line) return;
 
         // Extraire le % de bootstrap
-        const m = line.match(/Bootstrapped\s+(\d+)%/i);
+        const m = line.match(/Bootstrapped\s+(\d+)%(?:[^:]*:\s*(.+))?/i);
         if (m) {
           bootstrap = parseInt(m[1], 10);
-          console.log(`[Tor] Bootstrap ${bootstrap}%`);
+          const msg = m[2] ? m[2].trim() : null;
+          console.log(`[Tor] Bootstrap ${bootstrap}%${msg ? ' — ' + msg : ''}`);
+          // Notifier la splash si elle est connectée
+          if (typeof this._onBootstrapProgress === 'function') {
+            this._onBootstrapProgress(bootstrap, msg ? `${bootstrap}% — ${msg}` : null);
+          }
         }
 
         if (!resolved && bootstrap >= 100) {

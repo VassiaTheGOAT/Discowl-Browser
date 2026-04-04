@@ -838,6 +838,76 @@ const T_AP = {
 };
 Object.entries(T_AP).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
 
+/* ── Barre de mise à jour (update bar) ── */
+const T_UPD = {
+  en: {
+    'upd.available':      'Discowl {v} is available',
+    'upd.download':       'Download',
+    'upd.later':          'Later',
+    'upd.downloading':    'Downloading Discowl {v}',
+    'upd.cancel':         'Cancel',
+    'upd.ready':          'Discowl {v} ready to install',
+    'upd.ready_sub':      'The app will restart automatically',
+    'upd.install':        'Restart and install',
+    'upd.error_title':    'Download error',
+    'upd.retry':          'Retry',
+    'upd.deferred_toast': 'Update available — will install on next restart.',
+  },
+  fr: {
+    'upd.available':      'Discowl {v} est disponible',
+    'upd.download':       'Télécharger',
+    'upd.later':          'Plus tard',
+    'upd.downloading':    'Téléchargement de Discowl {v}',
+    'upd.cancel':         'Annuler',
+    'upd.ready':          'Discowl {v} prêt à installer',
+    'upd.ready_sub':      "L'app redémarrera automatiquement",
+    'upd.install':        'Redémarrer et installer',
+    'upd.error_title':    'Erreur de téléchargement',
+    'upd.retry':          'Réessayer',
+    'upd.deferred_toast': 'Mise à jour disponible — sera installée au prochain redémarrage.',
+  },
+  es: {
+    'upd.available':      'Discowl {v} está disponible',
+    'upd.download':       'Descargar',
+    'upd.later':          'Más tarde',
+    'upd.downloading':    'Descargando Discowl {v}',
+    'upd.cancel':         'Cancelar',
+    'upd.ready':          'Discowl {v} listo para instalar',
+    'upd.ready_sub':      'La aplicación se reiniciará automáticamente',
+    'upd.install':        'Reiniciar e instalar',
+    'upd.error_title':    'Error de descarga',
+    'upd.retry':          'Reintentar',
+    'upd.deferred_toast': 'Actualización disponible — se instalará al próximo reinicio.',
+  },
+  de: {
+    'upd.available':      'Discowl {v} ist verfügbar',
+    'upd.download':       'Herunterladen',
+    'upd.later':          'Später',
+    'upd.downloading':    'Discowl {v} wird heruntergeladen',
+    'upd.cancel':         'Abbrechen',
+    'upd.ready':          'Discowl {v} bereit zur Installation',
+    'upd.ready_sub':      'Die App wird automatisch neu gestartet',
+    'upd.install':        'Neu starten und installieren',
+    'upd.error_title':    'Downloadfehler',
+    'upd.retry':          'Erneut versuchen',
+    'upd.deferred_toast': 'Update verfügbar — wird beim nächsten Neustart installiert.',
+  },
+  it: {
+    'upd.available':      'Discowl {v} è disponibile',
+    'upd.download':       'Scarica',
+    'upd.later':          'Più tardi',
+    'upd.downloading':    'Download di Discowl {v}',
+    'upd.cancel':         'Annulla',
+    'upd.ready':          'Discowl {v} pronto per l\'installazione',
+    'upd.ready_sub':      "L'app si riavvierà automaticamente",
+    'upd.install':        'Riavvia e installa',
+    'upd.error_title':    'Errore di download',
+    'upd.retry':          'Riprova',
+    'upd.deferred_toast': 'Aggiornamento disponibile — verrà installato al prossimo riavvio.',
+  },
+};
+Object.entries(T_UPD).forEach(([lang, keys]) => { if (T[lang]) Object.assign(T[lang], keys); });
+
 
 const i18n = (() => {
   let _lang = 'en';

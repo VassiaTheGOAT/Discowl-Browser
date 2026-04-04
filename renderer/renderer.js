@@ -168,7 +168,7 @@ window.DiscowlBrowser = {
   getCurrentTitle:   ()      => getActiveTab()?.title || '',
   setEngine:         (key)   => setEngine(key),
   setTheme:          (theme) => applyTheme(theme),
-  onSettingsChanged: (s)     => { settings = s; applySettings(s); if (window.i18n && s.language) { window.i18n.setLang(s.language); window.i18n.apply(); } },
+  onSettingsChanged: (s)     => { settings = s; applySettings(s); if (window.i18n && s.language) { window.i18n.setLang(s.language); window.i18n.apply(); window.dispatchEvent(new CustomEvent('discowl:langChanged')); } },
   applyToolbarConfig: (cfg)  => applyToolbarConfig(cfg),
   getTabById:        (id)    => getTab(id),
   switchToTab:       (id)    => switchTab(id),
@@ -190,7 +190,7 @@ function _openCustomizeTab() {
 
   const id = ++tabCounter;
   const webview = document.createElement('webview');
-  webview.setAttribute('partition', 'persist:main');
+  webview.setAttribute('partition', '');
   webview.setAttribute('allowpopups', '');
   webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no');
   webview.dataset.tabId = id;
@@ -199,7 +199,7 @@ function _openCustomizeTab() {
   const tab = {
     id, title: i18n.t('tab.customize'), url: 'about:customize-toolbar',
     favicon: '', isPrivate: false, isLoading: false,
-    partition: 'persist:main', webview,
+    partition: '', webview,
     canGoBack: false, canGoForward: false, zoom: 1,
     isCustomizeTab: true,
     _prevWasNewtab: false, _nextAfterNewtab: ''
@@ -222,7 +222,7 @@ function _openPasswordsTab() {
 
   const id = ++tabCounter;
   const webview = document.createElement('webview');
-  webview.setAttribute('partition', 'persist:main');
+  webview.setAttribute('partition', '');
   webview.setAttribute('allowpopups', '');
   webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no');
   webview.dataset.tabId = id;
@@ -230,7 +230,7 @@ function _openPasswordsTab() {
 
   const tab = {
     id, title: 'Passwords', url: 'about:passwords', favicon: '',
-    isPrivate: false, isLoading: false, partition: 'persist:main', webview,
+    isPrivate: false, isLoading: false, partition: '', webview,
     canGoBack: false, canGoForward: false, zoom: 1,
     isPasswordsTab: true,
     _prevWasNewtab: false, _nextAfterNewtab: ''
@@ -248,7 +248,7 @@ function _closePasswordsTab() {
 
 function _openDownloadsTab() {
   const id = ++tabCounter;
-  const partition = 'persist:main';
+  const partition = '';
 
   // Webview factice non chargé (comme about:newtab)
   const webview = document.createElement('webview');
@@ -295,7 +295,7 @@ function createTab(url = 'about:newtab', isPrivate = false) {
   const id        = ++tabCounter;
   const partition = isPrivate
     ? `partition:private-${id}`  // Not persisted = private session
-    : 'persist:main';             // Shared, persisted session
+    : '';             // Shared, persisted session
 
   /* ─── Create webview element ─────────────────────────────── */
   const webview = document.createElement('webview');
@@ -2273,36 +2273,37 @@ function updateNewtabMode(isPrivate) {
   if (!ntpEl || !titleEl) return;
   requestAnimationFrame(positionNewtabLogo);
 
-  const torActive = !!settings.torEnabled;
+  const torActive   = !!settings.torEnabled;
+  const hasCustomBg = settings.ntpBackground?.type && settings.ntpBackground.type !== 'none';
 
-  // Réinitialiser
-  ntpEl.style.background = '';
-  titleEl.textContent    = 'Discowl';
+  // Réinitialiser le titre uniquement
+  titleEl.textContent = 'Discowl';
 
   if (torActive) {
-    // Tor : fond violet→rose, titre "Discowl : Tor 🧅" couleur normale cyan→jaune
-    ntpEl.style.background = 'linear-gradient(135deg, #1a001f 0%, #2d0050 40%, #4b0082 70%, #6b0fa0 100%)';
+    // Fond violet Tor — uniquement si pas de fond custom utilisateur
+    if (!hasCustomBg) {
+      ntpEl.style.background = 'linear-gradient(135deg, #1a001f 0%, #2d0050 40%, #4b0082 70%, #6b0fa0 100%)';
+    }
     titleEl.textContent = 'Discowl : Tor 🧅';
-    titleEl.style.background       = 'linear-gradient(90deg, #0cc0df, #ffde59)';
-    titleEl.style.webkitBackgroundClip = 'text';
-    titleEl.style.backgroundClip   = 'text';
-    titleEl.style.webkitTextFillColor = 'transparent';
-    titleEl.style.color            = 'transparent';
+    titleEl.style.background            = 'linear-gradient(90deg, #0cc0df, #ffde59)';
+    titleEl.style.webkitBackgroundClip  = 'text';
+    titleEl.style.backgroundClip        = 'text';
+    titleEl.style.webkitTextFillColor   = 'transparent';
+    titleEl.style.color                 = 'transparent';
   } else if (isPrivate) {
-    // Privé : fond normal inchangé, titre violet→rose
-    ntpEl.style.background = '';
-    titleEl.style.background       = 'linear-gradient(90deg, #c084fc, #f472b6, #e879f9)';
-    titleEl.style.webkitBackgroundClip = 'text';
-    titleEl.style.backgroundClip   = 'text';
-    titleEl.style.webkitTextFillColor = 'transparent';
-    titleEl.style.color            = 'transparent';
+    if (!hasCustomBg) ntpEl.style.background = '';
+    titleEl.style.background            = 'linear-gradient(90deg, #c084fc, #f472b6, #e879f9)';
+    titleEl.style.webkitBackgroundClip  = 'text';
+    titleEl.style.backgroundClip        = 'text';
+    titleEl.style.webkitTextFillColor   = 'transparent';
+    titleEl.style.color                 = 'transparent';
   } else {
-    // Normal : gradient cyan→jaune (même que base CSS)
-    titleEl.style.background       = 'linear-gradient(90deg, #0cc0df, #ffde59)';
-    titleEl.style.webkitBackgroundClip = 'text';
-    titleEl.style.backgroundClip   = 'text';
-    titleEl.style.webkitTextFillColor = 'transparent';
-    titleEl.style.color            = 'transparent';
+    if (!hasCustomBg) ntpEl.style.background = '';
+    titleEl.style.background            = 'linear-gradient(90deg, #0cc0df, #ffde59)';
+    titleEl.style.webkitBackgroundClip  = 'text';
+    titleEl.style.backgroundClip        = 'text';
+    titleEl.style.webkitTextFillColor   = 'transparent';
+    titleEl.style.color                 = 'transparent';
   }
 }
 
@@ -2522,27 +2523,29 @@ function applyNtpBackground(cfg) {
   if (!ntpEl) return;
 
   if (cfg.type === 'color' && cfg.value) {
-    ntpEl.style.setProperty('--ntp-bg-color', cfg.value);
-    ntpEl.style.removeProperty('--ntp-bg-image');
+    ntpEl.style.background      = '';
     ntpEl.style.backgroundImage = '';
     ntpEl.style.backgroundColor = cfg.value;
+    ntpEl.style.setProperty('--ntp-bg-color', cfg.value);
+    ntpEl.style.removeProperty('--ntp-bg-image');
   } else if (cfg.type === 'image' && cfg.value) {
-    const imgVal = `url('${cfg.value.replace(/'/g, "\'")}')`;
+    const imgVal = `url('${cfg.value.replace(/'/g, "\\'")}')`;
+    ntpEl.style.background         = '';
+    ntpEl.style.backgroundImage    = imgVal;
+    ntpEl.style.backgroundSize     = 'cover';
+    ntpEl.style.backgroundPosition = 'center';
+    ntpEl.style.backgroundColor    = '';
     ntpEl.style.setProperty('--ntp-bg-image', imgVal);
     ntpEl.style.removeProperty('--ntp-bg-color');
-    ntpEl.style.backgroundImage = imgVal;
-    ntpEl.style.backgroundSize  = 'cover';
-    ntpEl.style.backgroundPosition = 'center';
-    ntpEl.style.backgroundColor = '';
   } else {
-    // Réinitialiser
+    // Pas de fond custom — laisser updateNewtabMode gérer (Tor violet, etc.)
     ntpEl.style.removeProperty('--ntp-bg-image');
     ntpEl.style.removeProperty('--ntp-bg-color');
     ntpEl.style.backgroundImage = '';
     ntpEl.style.backgroundColor = '';
+    // Ne pas effacer ntpEl.style.background — c'est updateNewtabMode qui le gère
   }
 
-  // Adapter le curseur et la couleur du texte de l'input selon la luminosité du fond
   _updateNtpInputContrast(cfg);
 }
 
@@ -2804,41 +2807,94 @@ const updBar = (() => {
     return (b / 1_048_576).toFixed(1) + ' Mo';
   }
 
+  // ── Mettre à jour les libellés HTML selon la langue courante ─
+  function _applyLabels() {
+    // Labels statiques (boutons, sous-titres)
+    if (els.btnDownload)   _setTxt(els.btnDownload,   'upd.download',   '⬇ ');
+    if (els.btnLaterAvail) _setTxt(els.btnLaterAvail, 'upd.later');
+    if (els.btnCancel)     _setTxt(els.btnCancel,     'upd.cancel');
+    if (els.btnInstall)    _setInstallLabel();
+    if (els.btnLaterReady) _setTxt(els.btnLaterReady, 'upd.later');
+    if (els.btnRetry)      _setTxt(els.btnRetry,      'upd.retry');
+    // Sous-titre "ready"
+    const sub = bar.querySelector('.upd-sub');
+    if (sub) sub.textContent = i18n.t('upd.ready_sub');
+    // Titre erreur
+    const errLabel = bar.querySelector('[data-section="error"] .upd-label');
+    if (errLabel) errLabel.textContent = i18n.t('upd.error_title');
+  }
+
+  function _setTxt(el, key, prefix = '') {
+    if (!el) return;
+    // Préserver le SVG enfant s'il existe
+    const svg = el.querySelector('svg');
+    if (svg) {
+      el.childNodes.forEach(n => { if (n.nodeType === Node.TEXT_NODE) n.remove(); });
+      el.appendChild(document.createTextNode(' ' + i18n.t(key)));
+    } else {
+      el.textContent = prefix + i18n.t(key);
+    }
+  }
+
+  function _setInstallLabel() {
+    if (!els.btnInstall) return;
+    els.btnInstall.innerHTML = `
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      ${i18n.t('upd.install')}`;
+  }
+
+  // Appliquer les labels au démarrage et à chaque changement de langue
+  _applyLabels();
+  window.addEventListener('discowl:langChanged', _applyLabels);
+
   // ── Afficher un état ─────────────────────────────────────────
   function show(state, data = {}) {
     bar.dataset.state = state;
 
     if (state === 'available') {
       _currentVersion = data.version || '';
+      const label = bar.querySelector('[data-section="available"] .upd-label');
+      if (label) label.innerHTML = i18n.t('upd.available', { v: '' }) // base
+        .replace(i18n.t('upd.available', { v: '' }), '') || '';
       if (els.versionAvail) els.versionAvail.textContent = _currentVersion;
+      // Mettre à jour le label complet
+      const avLabel = bar.querySelector('[data-section="available"] .upd-label');
+      if (avLabel) avLabel.innerHTML =
+        i18n.t('upd.available', { v: `<strong>${_currentVersion}</strong>` });
     }
 
     if (state === 'downloading') {
-      if (data.version && els.versionDl)
-        els.versionDl.textContent = data.version;
-
-      // Mise à jour de la progression
+      if (data.version) {
+        _currentVersion = data.version;
+        if (els.versionDl) els.versionDl.textContent = data.version;
+        const dlLabel = bar.querySelector('[data-section="downloading"] .upd-label');
+        if (dlLabel) dlLabel.innerHTML =
+          i18n.t('upd.downloading', { v: `<strong>${data.version}</strong>` });
+      }
       if (data.percent !== undefined) {
         const pct = Math.max(0, Math.min(100, data.percent));
         if (els.pct)  els.pct.textContent  = pct + '%';
         if (els.fill) els.fill.style.width = pct + '%';
       }
-      if (data.bytesPerSecond !== undefined && els.speed) {
+      if (data.bytesPerSecond !== undefined && els.speed)
         els.speed.textContent = _fmt(data.bytesPerSecond) + '/s';
-      }
-      if (data.transferred !== undefined && data.total !== undefined && els.size) {
+      if (data.transferred !== undefined && data.total !== undefined && els.size)
         els.size.textContent = _fmt(data.transferred) + ' / ' + _fmt(data.total);
-      }
     }
 
     if (state === 'ready') {
-      if (els.versionReady)
-        els.versionReady.textContent = data.version || _currentVersion || '';
+      const v = data.version || _currentVersion || '';
+      const rdLabel = bar.querySelector('[data-section="ready"] .upd-label');
+      if (rdLabel) rdLabel.innerHTML =
+        i18n.t('upd.ready', { v: `<strong>${v}</strong>` });
+      if (els.versionReady) els.versionReady.textContent = v;
     }
 
     if (state === 'error') {
       if (els.errText)
-        els.errText.textContent = data.message || 'Vérifiez votre connexion et réessayez.';
+        els.errText.textContent = data.message || '';
     }
   }
 
@@ -2851,7 +2907,6 @@ const updBar = (() => {
   // [Télécharger]
   if (els.btnDownload) {
     els.btnDownload.addEventListener('click', async () => {
-      // Passer immédiatement en mode downloading (feedback instantané)
       show('downloading', { version: _currentVersion, percent: 0 });
       if (els.pct)  els.pct.textContent  = '0%';
       if (els.fill) els.fill.style.width = '0%';
@@ -2874,19 +2929,13 @@ const updBar = (() => {
   // [Redémarrer et installer]
   if (els.btnInstall) {
     els.btnInstall.addEventListener('click', async () => {
-      // Désactiver le bouton pour éviter les double-clics
       els.btnInstall.disabled = true;
-      els.btnInstall.textContent = 'Installation en cours…';
+      els.btnInstall.textContent = i18n.t('upd.install') + '…';
       try {
         await window.discowlAPI.updates.install();
-        // L'app va se fermer — NSIS prend la main
       } catch (e) {
         els.btnInstall.disabled = false;
-        els.btnInstall.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Redémarrer et installer`;
+        _setInstallLabel();
         show('error', { message: e?.message });
       }
     });
@@ -2900,16 +2949,15 @@ const updBar = (() => {
     });
   }
 
-  // [Plus tard] (état ready — MAJ prête, on garde pour plus tard)
+  // [Plus tard] (état ready)
   if (els.btnLaterReady) {
     els.btnLaterReady.addEventListener('click', () => {
       hide();
-      // Réafficher un rappel discret via toast
-      showToast('Mise à jour disponible — elle sera installée au prochain redémarrage.', 'info');
+      showToast(i18n.t('upd.deferred_toast'), 'info');
     });
   }
 
-  // [×] fermer (available, ready, error)
+  // [×] fermer
   [els.closeAvail, els.closeReady, els.closeErr].forEach(btn => {
     if (btn) btn.addEventListener('click', () => {
       window.discowlAPI.updates.defer?.().catch(() => {});

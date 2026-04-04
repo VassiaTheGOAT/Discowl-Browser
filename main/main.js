@@ -6,7 +6,7 @@ const fs   = require('fs');
 const os   = require('os');
 
 const TorManager        = require('./torManager');
-const { initAdBlock, registerIpc: registerAdBlockIpc, setAdBlockEnabled, setTorMode } = require('./adBlockSession');
+const { initAdBlock, registerIpc: registerAdBlockIpc, setAdBlockEnabled } = require('./adBlockSession');
 const privacyManager  = require('./privacyManager');
 
 const passwordManager = require('./passwordManager');
@@ -51,15 +51,11 @@ const earlySettings = readSettingsSync();
 const USE_CUSTOM_TITLEBAR = !!earlySettings.customTitlebar;
 
 // ── Cache / Storage cleanup ────────────────────────────────────
-// Les erreurs "Unable to move the cache" et "Failed to delete the database"
-// viennent toutes du dossier Partitions/persist_main/ de Chromium :
-//
-//   Cache/               → migration de format → Access Denied
-//   GPUCache/            → idem
-//   Service Worker/      → quota_database SQLite corrompu/verrouillé
-//   QuotaManager(-journal) → idem
-//
-// On supprime ces fichiers VOLATILS avant que Chromium ne les ouvre.
+// Chromium verrouille certains fichiers entre deux sessions (LOCK, quota DB...).
+// Stratégie :
+//   1. Supprimer les LOCK files spécifiques (léger, ciblé)
+//   2. Supprimer les caches HTTP/GPU entiers (recréés automatiquement)
+//   3. Désactiver le cache HTTP via commandLine (empêche la recréation)
 // On préserve Cookies, Local Storage, IndexedDB (données utilisateur).
 {
   let userDataBase;
@@ -71,40 +67,68 @@ const USE_CUSTOM_TITLEBAR = !!earlySettings.customTitlebar;
     userDataBase = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   }
 
-  const base    = path.join(userDataBase, 'discowl-browser');
-  const partDir = path.join(base, 'Partitions', 'persist_main');
+  const base = path.join(userDataBase, 'discowl-browser');
 
-  // Dossiers/fichiers à supprimer (volatils — recréés automatiquement)
-  const toDelete = [
-    path.join(base,    'Cache'),
-    path.join(base,    'Cache_Data'),
-    path.join(base,    'GPUCache'),
-    path.join(base,    'Code Cache'),
-    path.join(partDir, 'Cache'),
-    path.join(partDir, 'Cache_Data'),
-    path.join(partDir, 'GPUCache'),
-    path.join(partDir, 'Code Cache'),
-    path.join(partDir, 'Service Worker'),
-    path.join(partDir, 'QuotaManager'),
-    path.join(partDir, 'QuotaManager-journal'),
-    path.join(partDir, 'databases'),
-    path.join(partDir, 'blob_storage'),
+  // Chromium nomme les partitions ainsi sur disque :
+  //   ''  → Partitions/main          (Electron >= 20)
+  //   ''  → Partitions/persist_main   (Electron < 20)
+  const partDirs = [
+    path.join(base, 'Partitions', 'main'),
+    path.join(base, 'Partitions', 'persist_main'),
   ];
 
-  let cleaned = 0;
-  for (const target of toDelete) {
-    try {
-      if (fs.existsSync(target)) {
-        fs.rmSync(target, { recursive: true, force: true });
-        cleaned++;
-      }
-    } catch { /* verrouillé — Chromium gèrera */ }
+  // ── 1. LOCK files — supprimer uniquement les verrous (pas les données) ──
+  // Ces fichiers restent ouverts si l'app s'est fermée brutalement.
+  const lockFiles = [];
+  for (const partDir of partDirs) {
+    lockFiles.push(
+      path.join(partDir, 'File System', 'Origins', 'LOCK'),
+      path.join(partDir, 'File System', 'Origins', 'LOG'),
+      path.join(partDir, 'QuotaManager'),
+      path.join(partDir, 'QuotaManager-journal'),
+      path.join(partDir, 'databases'),
+    );
   }
-  if (cleaned > 0) console.log(`[Cache] ${cleaned} dossier(s) volatils nettoyés`);
+  lockFiles.push(
+    path.join(base, 'QuotaManager'),
+    path.join(base, 'QuotaManager-journal'),
+  );
+  for (const f of lockFiles) {
+    try { if (fs.existsSync(f)) { fs.rmSync(f, { recursive: true, force: true }); } } catch {}
+  }
+
+  // ── 2. Caches HTTP/GPU entiers (volatils, recréés automatiquement) ──
+  const cacheDirs = [
+    path.join(base, 'Cache'),
+    path.join(base, 'Cache_Data'),
+    path.join(base, 'GPUCache'),
+    path.join(base, 'Code Cache'),
+  ];
+  for (const partDir of partDirs) {
+    cacheDirs.push(
+      path.join(partDir, 'Cache'),
+      path.join(partDir, 'Cache_Data'),
+      path.join(partDir, 'GPUCache'),
+      path.join(partDir, 'Code Cache'),
+      path.join(partDir, 'Service Worker'),
+      path.join(partDir, 'blob_storage'),
+    );
+  }
+  let cleaned = 0;
+  for (const d of cacheDirs) {
+    try { if (fs.existsSync(d)) { fs.rmSync(d, { recursive: true, force: true }); cleaned++; } } catch {}
+  }
+  if (cleaned > 0) console.log(`[Cache] ${cleaned} cache(s) nettoyé(s)`);
 }
 
-// Désactiver le GPU disk cache et le shader cache
+// ── Switches Chromium ─────────────────────────────────────────────────────
+// Désactiver les caches disque qui causent des erreurs de verrouillage
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-application-cache');
+// Forcer le cache HTTP en mémoire uniquement (taille 1 = mémoire, pas de fichiers)
+app.commandLine.appendSwitch('disk-cache-size', '1');
+// Désactiver le quota manager persistant (cause les erreurs quota_database)
+app.commandLine.appendSwitch('unlimited-storage');
 
 // Supprimer la menubar native — remplacée par menubar HTML custom
 Menu.setApplicationMenu(null);
@@ -136,6 +160,18 @@ app.whenReady().then(async () => {
   storage    = new Storage();
   torManager = new TorManager();
 
+  // ── Désactiver le cache HTTP sur la session persistante ──────
+  // Évite les erreurs "Unable to move the cache" et "Unable to create cache".
+  // Le cache est mis en mémoire uniquement (setCacheSize(0) = pas de limite
+  // mais sans écriture disque quand disk-cache-size=1 est actif).
+  try {
+    const mainSession = session.fromPartition('');
+    await mainSession.clearCache();
+    await mainSession.setCacheSize(0);
+  } catch (e) {
+    console.warn('[Session] clearCache/setCacheSize:', e.message);
+  }
+
   const settings = storage.getSettings();
 
   // Déverrouiller le vault selon le mode
@@ -151,27 +187,34 @@ app.whenReady().then(async () => {
   privacyManager.initialize(settings);
 
   // Initialiser le bloqueur de pub
-  if (settings.torEnabled) setTorMode(true);
   await initAdBlock(settings, privacyManager).catch(e => console.warn('[AdBlock] init error:', e.message));
   registerAdBlockIpc();
 
   // Enregistrer les IPC update (check manuel depuis Settings)
   registerUpdaterIpc(() => mainWindow);
 
-  // Démarrer tor.exe si activé
-  if (settings.torEnabled) {
-    console.log('[Main] Démarrage de tor.exe…');
-    torManager.startTor()
-      .then(() => console.log('[Main] Tor démarré avec succès'))
-      .catch(e => console.error('[Main] Tor échoué au boot :', e.message));
-  }
+  // ── Démarrer Tor ET ouvrir la fenêtre dans le bon ordre ──────
+  //
+  // PROBLÈME : Chromium reçoit --proxy-server=socks5://127.0.0.1:9050
+  // dès le démarrage. Si on ouvre la fenêtre avant que tor.exe soit
+  // bootstrappé, toutes les requêtes réseau échouent → app bloquée.
+  //
+  // SOLUTION : si Tor est activé, on attend qu'il soit prêt (ou qu'il
+  // échoue / timeout) AVANT d'appeler createWindow().
+  // ──────────────────────────────────────────────────────────────────
+  const openApp = () => {
+    runUpdater(() => {
+      createWindow();
+      startBackgroundChecks(mainWindow);
+    });
+  };
 
-  // Splash updater AVANT la fenêtre principale (en prod uniquement)
-  // En dev, runUpdater appelle onDone immédiatement
-  runUpdater(() => {
-    createWindow();
-    startBackgroundChecks(mainWindow);
-  });
+  if (settings.torEnabled) {
+    console.log('[Main] Tor activé — bootstrap en cours avant ouverture…');
+    _startTorWithSplash(openApp);
+  } else {
+    openApp();
+  }
 });
 
 app.on('window-all-closed', async () => {
@@ -188,6 +231,132 @@ app.on('activate', () => {
 /* ══════════════════════════════════════════════════════════════
    FENÊTRE
 ══════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════
+   TOR SPLASH — fenêtre native de bootstrap
+   Affiche la progression réelle lue depuis stdout de tor.exe.
+   L'app ne s'ouvre qu'une fois Tor bootstrappé (ou après timeout).
+══════════════════════════════════════════════════════════════ */
+function _startTorWithSplash(onReady) {
+  let splashWin = null;
+  let launched  = false;
+
+  // ── HTML inline (pas de fichier externe) ────────────────────
+  const html = `<!DOCTYPE html><html><head>
+<meta charset="UTF-8"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"/>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    background:#0f1117;color:#dde1f0;
+    width:420px;height:220px;overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:18px;user-select:none;-webkit-app-region:drag;
+  }
+  .header{display:flex;align-items:center;gap:14px}
+  .onion{font-size:36px;line-height:1;filter:drop-shadow(0 0 12px rgba(167,139,250,.5))}
+  .brand{display:flex;flex-direction:column;gap:3px}
+  .name{font-size:22px;font-weight:700;color:#a78bfa;letter-spacing:-.3px}
+  .sub{font-size:12px;color:#475569}
+  .panel{width:360px;display:flex;flex-direction:column;gap:8px}
+  .status{font-size:12.5px;color:#94a3b8;text-align:center;min-height:18px;transition:color .2s}
+  .status.ok{color:#4ade80}.status.err{color:#f87171}
+  .track{width:100%;height:6px;background:#1a2035;border-radius:3px;overflow:hidden}
+  .fill{height:100%;width:0%;border-radius:3px;transition:width .5s cubic-bezier(.4,0,.2,1);
+        background:linear-gradient(90deg,#7c3aed,#a78bfa)}
+  .fill.indeterminate{width:35%;animation:ind 1.6s ease-in-out infinite}
+  @keyframes ind{0%{transform:translateX(-200%)}100%{transform:translateX(500%)}}
+  .pct{font-size:11px;color:#4a5568;text-align:right;font-variant-numeric:tabular-nums}
+</style></head><body>
+<div class="header">
+  <div class="onion">🧅</div>
+  <div class="brand">
+    <div class="name">Discowl Tor</div>
+    <div class="sub">Connexion au réseau Tor…</div>
+  </div>
+</div>
+<div class="panel">
+  <div class="status" id="s">Démarrage de Tor…</div>
+  <div class="track"><div class="fill indeterminate" id="f"></div></div>
+  <div class="pct" id="p"></div>
+</div>
+<script>
+  const s=document.getElementById('s'),f=document.getElementById('f'),p=document.getElementById('p');
+  window.__setProgress=(pct,msg)=>{
+    if(pct>=0){f.classList.remove('indeterminate');f.style.width=pct+'%';p.textContent=pct+'%';}
+    if(msg){s.textContent=msg;}
+  };
+  window.__setDone=()=>{
+    f.classList.remove('indeterminate');f.style.width='100%';
+    s.textContent='Connecté !';s.className='status ok';p.textContent='100%';
+  };
+  window.__setError=(msg)=>{
+    s.textContent=msg||'Erreur Tor — lancement quand même…';
+    s.className='status err';f.style.background='#f87171';
+  };
+</script></body></html>`;
+
+  // ── Créer la splash ─────────────────────────────────────────
+  splashWin = new BrowserWindow({
+    width: 420, height: 220,
+    resizable: false, frame: false,
+    transparent: false, alwaysOnTop: true,
+    center: true, show: false, skipTaskbar: true,
+    backgroundColor: '#0f1117',
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+  });
+
+  splashWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  splashWin.once('ready-to-show', () => splashWin?.show());
+  splashWin.on('closed', () => { splashWin = null; });
+
+  // ── Helper : envoyer la progression à la splash via executeJS ──
+  const send = (fn, ...args) => {
+    if (!splashWin || splashWin.isDestroyed()) return;
+    const argsStr = args.map(a => JSON.stringify(a)).join(',');
+    splashWin.webContents.executeJavaScript(`window.${fn}(${argsStr})`).catch(()=>{});
+  };
+
+  // ── Fermer la splash et ouvrir l'app ───────────────────────
+  const launch = (delay = 600) => {
+    if (launched) return;
+    launched = true;
+    setTimeout(() => {
+      if (splashWin && !splashWin.isDestroyed()) splashWin.close();
+      onReady();
+    }, delay);
+  };
+
+  // ── Timeout global 60s ──────────────────────────────────────
+  const globalTimeout = setTimeout(() => {
+    console.warn('[Main] Tor — timeout 60s, ouverture forcée');
+    send('__setError', 'Timeout — lancement sans Tor…');
+    launch(1200);
+  }, 60_000);
+
+  // ── Hook sur la progression bootstrap de tor.exe ────────────
+  // torManager.startTor() lit stdout/stderr — on branche un listener
+  // supplémentaire AVANT startTor() pour intercepter le % en temps réel.
+  torManager._onBootstrapProgress = (pct, msg) => {
+    send('__setProgress', pct, msg || `Bootstrap ${pct}%…`);
+  };
+
+  torManager.startTor()
+    .then(() => {
+      clearTimeout(globalTimeout);
+      console.log('[Main] Tor bootstrappé');
+      send('__setDone');
+      launch(700);
+    })
+    .catch(e => {
+      clearTimeout(globalTimeout);
+      console.error('[Main] Tor échoué:', e.message);
+      send('__setError', 'Tor indisponible — lancement quand même…');
+      launch(1200);
+    });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900,
@@ -256,8 +425,8 @@ function createWindow() {
   });
 
   // ── Interception des téléchargements ────────────────────────
-  // Les webviews utilisent fromPartition('persist:main') — PAS defaultSession
-  const mainSession = session.fromPartition('persist:main');
+  // Les webviews utilisent la defaultSession (partition='')
+  const mainSession = session.fromPartition('');
   mainSession.on('will-download', (event, item) => {
     const id = Date.now() + '_' + Math.random().toString(36).slice(2);
 
